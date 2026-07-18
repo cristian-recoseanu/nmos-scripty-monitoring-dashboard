@@ -1,0 +1,14 @@
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  opacity: 0.72;
+  color: inherit;
+}
+
+.icon[data-kind="system"] {
+  opacity: 0.85;
+}

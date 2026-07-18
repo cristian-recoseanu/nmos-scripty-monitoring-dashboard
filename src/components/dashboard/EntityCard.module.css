@@ -1,0 +1,96 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 9.5rem;
+  max-width: 14rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+
+.card:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.selected {
+  border-color: color-mix(in srgb, #0b6bcb 55%, transparent);
+  background: color-mix(in srgb, #0b6bcb 12%, transparent);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cardIcons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.cardLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.hint,
+.ncpPill {
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.hint {
+  opacity: 0.7;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.ncpPill[data-connected="true"] {
+  color: #027a48;
+  background: color-mix(in srgb, #027a48 12%, transparent);
+}
+
+.ncpPill[data-connected="false"] {
+  color: #b42318;
+  background: color-mix(in srgb, #b42318 12%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .selected {
+    background: color-mix(in srgb, #4da3ff 16%, transparent);
+  }
+
+  .ncpPill[data-connected="true"] {
+    color: #47cd89;
+    background: color-mix(in srgb, #47cd89 14%, transparent);
+  }
+
+  .ncpPill[data-connected="false"] {
+    color: #f97066;
+    background: color-mix(in srgb, #f97066 14%, transparent);
+  }
+}

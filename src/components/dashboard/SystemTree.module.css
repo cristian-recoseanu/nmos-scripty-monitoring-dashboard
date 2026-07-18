@@ -1,0 +1,85 @@
+.chartScroll {
+  overflow: auto;
+  max-height: 100%;
+  min-height: 12rem;
+  padding-bottom: 0.5rem;
+}
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: max-content;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stem {
+  width: 1px;
+  height: 0.75rem;
+  background: color-mix(in srgb, var(--foreground) 22%, transparent);
+  flex-shrink: 0;
+}
+
+/*
+ * Sibling rail: padding (not gap) so the horizontal line is continuous.
+ * Each childSlot draws its segment of the top rail + a drop to the card.
+ */
+.children {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.childSlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 0.75rem 0.5rem 0;
+}
+
+/* Vertical drop from the sibling rail onto this child */
+.childSlot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 0.75rem;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--foreground) 22%, transparent);
+}
+
+/* Horizontal sibling rail segment across this column */
+.childSlot:not(:only-child)::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--foreground) 22%, transparent);
+}
+
+.childSlot:first-child:not(:only-child)::after {
+  left: 50%;
+}
+
+.childSlot:last-child:not(:only-child)::after {
+  right: 50%;
+}
+
+.empty {
+  margin: 0.75rem 0 0;
+  opacity: 0.65;
+  font-size: 0.875rem;
+  text-align: center;
+}

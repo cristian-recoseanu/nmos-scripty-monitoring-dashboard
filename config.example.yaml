@@ -1,0 +1,9 @@
+registry:
+  host: 127.0.0.1
+  port: 3211
+  protocol: http
+  queryApiVersion: v1.3
+  basePath: /x-nmos/query
+
+logLevel: info
+appPort: 3000

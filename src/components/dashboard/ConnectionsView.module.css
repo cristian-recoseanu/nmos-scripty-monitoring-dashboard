@@ -1,0 +1,121 @@
+.scroll {
+  overflow: auto;
+  max-height: 100%;
+  min-height: 12rem;
+  padding-bottom: 0.5rem;
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: max-content;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.hubs {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.hub {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
+.anchor {
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+/* 1:1 — simple row so cards share one baseline and the line meets both borders. */
+.single {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.single .link {
+  width: 3.5rem;
+  flex: 0 0 auto;
+}
+
+.link {
+  flex: 1 1 auto;
+  height: 1px;
+  min-width: 2.5rem;
+  background: color-mix(in srgb, var(--foreground) 22%, transparent);
+  pointer-events: none;
+}
+
+.emptyOrbit {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* 2+ receivers — vertical stack with SVG spokes from the hub midline. */
+.fan {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.wires {
+  flex: 0 0 auto;
+  display: block;
+  overflow: visible;
+}
+
+.wire {
+  stroke: color-mix(in srgb, var(--foreground) 22%, transparent);
+  stroke-width: 1;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  flex-shrink: 0;
+}
+
+.disconnected {
+  border-top: 1px dashed color-mix(in srgb, var(--foreground) 16%, transparent);
+  padding-top: 1.25rem;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 9.5rem;
+  max-width: 14rem;
+  min-height: 4.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px dashed color-mix(in srgb, var(--foreground) 28%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+
+.placeholderTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.placeholderMeta {
+  font-size: 0.7rem;
+  opacity: 0.65;
+}
+
+.empty {
+  margin: 0.75rem 0 0;
+  opacity: 0.65;
+  font-size: 0.875rem;
+}

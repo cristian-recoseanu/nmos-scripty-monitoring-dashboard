@@ -1,6 +1,6 @@
 # NMOS Scripty Monitoring Dashboard
 
-[![CI]([https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml)](https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml))
+[![CI](https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml)
 
 Next.js (App Router, SSR) monitoring application that harvests an IS-04 Query API registry and BCP-008 sender/receiver monitors via IS-12 / MS-05-02, then presents a traffic-light system view.
 

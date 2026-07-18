@@ -1,5 +1,7 @@
 # NMOS Scripty Monitoring Dashboard
 
+[![CI]([https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml)](https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/cristian-recoseanu/nmos-scripty-monitoring-dashboard/actions/workflows/ci.yml))
+
 Next.js (App Router, SSR) monitoring application that harvests an IS-04 Query API registry and BCP-008 sender/receiver monitors via IS-12 / MS-05-02, then presents a traffic-light system view.
 
 ## Requirements
@@ -27,13 +29,15 @@ cp config.example.yaml config.yaml
 
 ## Scripts
 
-| Script | Purpose |
-| --- | --- |
-| `npm run dev` | Development server (Turbopack) |
-| `npm run build` / `npm start` | Production build and serve |
-| `npm run lint` | ESLint |
-| `npm test` | Unit tests (Vitest) |
-| `npm run test:coverage` | Unit tests with **coverage gate** (CI) |
+
+| Script                        | Purpose                                |
+| ----------------------------- | -------------------------------------- |
+| `npm run dev`                 | Development server (Turbopack)         |
+| `npm run build` / `npm start` | Production build and serve             |
+| `npm run lint`                | ESLint                                 |
+| `npm test`                    | Unit tests (Vitest)                    |
+| `npm run test:coverage`       | Unit tests with **coverage gate** (CI) |
+
 
 Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, branches ≥ 75% for `src/config`, `src/server`, and `src/lib`.
 
@@ -68,18 +72,24 @@ Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, br
 - Per-device NCP failures are isolated so the rest of the tree stays live.
 - `/api/status` exposes registry connection state plus lightweight in-process metrics (resource counts, NCP sessions, reconnect counters).
 
+
+
 ## HTTP API
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/status` | Runtime / registry connection status + metrics |
-| `GET` | `/api/snapshot` | Full system tree with bubbled health |
-| `GET` | `/api/detail?kind=&id=` | Selection detail (`system` \| `node` \| `device` \| `sender` \| `receiver`) |
-| `GET` | `/api/events` | SSE stream of snapshot updates |
-| `POST` | `/api/system/reset-monitors` | `ResetCountersAndMessages` on all connected NCP monitors |
-| `POST` | `/api/monitors/:deviceId/:oid/reset` | `ResetCountersAndMessages` |
-| `POST` | `/api/monitors/:deviceId/:oid/auto-reset` | Body `{ "value": boolean }` |
-| `GET` | `/api/monitors/:deviceId/:oid/counters?type=` | `lost` \| `late` \| `transmission` |
+
+| Method | Path                                          | Purpose                                                                 |
+| ------ | --------------------------------------------- | ----------------------------------------------------------------------- |
+| `GET`  | `/api/status`                                 | Runtime / registry connection status + metrics                          |
+| `GET`  | `/api/snapshot`                               | Full system tree with bubbled health                                    |
+| `GET`  | `/api/detail?kind=&id=`                       | Selection detail (`system` | `node` | `device` | `sender` | `receiver`) |
+| `GET`  | `/api/events`                                 | SSE stream of snapshot updates                                          |
+| `POST` | `/api/system/reset-monitors`                  | `ResetCountersAndMessages` on all connected NCP monitors                |
+| `POST` | `/api/monitors/:deviceId/:oid/reset`          | `ResetCountersAndMessages`                                              |
+| `POST` | `/api/monitors/:deviceId/:oid/auto-reset`     | Body `{ "value": boolean }`                                             |
+| `GET`  | `/api/monitors/:deviceId/:oid/counters?type=` | `lost` | `late` | `transmission`                                        |
+
+
+
 
 ## UI
 
@@ -90,20 +100,26 @@ Open `/` for the split dashboard:
 - Header: system health, total transitions (green/amber), **Reset all**, registry / live connection pills.
 - Live updates over SSE (`/api/events`). Swap views anytime via tabs (`?view=connections`).
 
+
+
 ## Configuration
 
-| Variable | Description |
-| --- | --- |
-| `NMOS_REGISTRY_HOST` | Registry hostname or IP (required unless URL set) |
-| `NMOS_REGISTRY_PORT` | Registry port (required) |
-| `NMOS_REGISTRY_URL` | Optional full URL (`http://host:port/path`) |
-| `NMOS_REGISTRY_PROTOCOL` | `http` or `https` (default `http`) |
-| `NMOS_QUERY_API_VERSION` | e.g. `v1.3` |
-| `NMOS_QUERY_BASE_PATH` | default `/x-nmos/query` |
-| `NMOS_REGISTRY_SECURE_WS` | Query subscription `secure` flag |
-| `NMOS_CONFIG_PATH` | Path to YAML config file (default `config.yaml`) |
-| `LOG_LEVEL` | `fatal` … `trace` / `silent` |
-| `PORT` | App listen port (default 3000) |
+
+| Variable                  | Description                                       |
+| ------------------------- | ------------------------------------------------- |
+| `NMOS_REGISTRY_HOST`      | Registry hostname or IP (required unless URL set) |
+| `NMOS_REGISTRY_PORT`      | Registry port (required)                          |
+| `NMOS_REGISTRY_URL`       | Optional full URL (`http://host:port/path`)       |
+| `NMOS_REGISTRY_PROTOCOL`  | `http` or `https` (default `http`)                |
+| `NMOS_QUERY_API_VERSION`  | e.g. `v1.3`                                       |
+| `NMOS_QUERY_BASE_PATH`    | default `/x-nmos/query`                           |
+| `NMOS_REGISTRY_SECURE_WS` | Query subscription `secure` flag                  |
+| `NMOS_CONFIG_PATH`        | Path to YAML config file (default `config.yaml`)  |
+| `LOG_LEVEL`               | `fatal` … `trace` / `silent`                      |
+| `PORT`                    | App listen port (default 3000)                    |
+
+
+
 
 ## Specs
 
@@ -111,3 +127,4 @@ Open `/` for the split dashboard:
 - [IS-12](https://specs.amwa.tv/is-12/)
 - [MS-05-02](https://specs.amwa.tv/ms-05-02/)
 - [BCP-008-01](https://specs.amwa.tv/bcp-008-01/) / [BCP-008-02](https://specs.amwa.tv/bcp-008-02/)
+

@@ -1,0 +1,72 @@
+.panel {
+  min-height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.headerMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.kind {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+
+.title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 0.15rem;
+}
+
+.status {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-top: 0.75rem;
+}
+
+.error,
+.errorInline {
+  color: #b42318;
+  font-size: 0.875rem;
+}
+
+.errorInline {
+  margin: 0.5rem 0;
+}
+
+.linkButton {
+  border: none;
+  background: transparent;
+  color: #0b6bcb;
+  font: inherit;
+  font-family: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error,
+  .errorInline {
+    color: #f97066;
+  }
+
+  .linkButton {
+    color: #4da3ff;
+  }
+}

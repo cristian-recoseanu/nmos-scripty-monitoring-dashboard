@@ -1,0 +1,193 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pill {
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+.pill[data-ok="true"] {
+  color: #027a48;
+  border-color: color-mix(in srgb, #027a48 35%, transparent);
+  background: color-mix(in srgb, #027a48 10%, transparent);
+}
+
+.pill[data-ok="false"] {
+  color: #b54708;
+  border-color: color-mix(in srgb, #b54708 35%, transparent);
+  background: color-mix(in srgb, #b54708 10%, transparent);
+}
+
+.resetButton {
+  font: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.resetButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.resetButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.banner {
+  padding: 0.55rem 1.25rem;
+  font-size: 0.8rem;
+  background: color-mix(in srgb, #b54708 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, #b54708 25%, transparent);
+}
+
+.bannerOk {
+  padding: 0.55rem 1.25rem;
+  font-size: 0.8rem;
+  background: color-mix(in srgb, #027a48 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, #027a48 25%, transparent);
+}
+
+.split {
+  display: grid;
+  grid-template-rows: minmax(16rem, 1fr) minmax(16rem, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.top,
+.bottom {
+  min-height: 0;
+  overflow: auto;
+  padding: 0.85rem 1.25rem 1.1rem;
+}
+
+.top {
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.15rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.tab {
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 0.65rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+}
+
+.tab[data-active="true"] {
+  opacity: 1;
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.tab:hover {
+  opacity: 1;
+}
+
+.panelHeader h2 {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+
+.panelMeta {
+  font-size: 0.75rem;
+  opacity: 0.55;
+}
+
+.empty {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  line-height: 1.5;
+  max-width: 40rem;
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .split {
+    grid-template-rows: auto auto;
+  }
+
+  .top,
+  .bottom {
+    max-height: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .pill[data-ok="true"] {
+    color: #47cd89;
+    border-color: color-mix(in srgb, #47cd89 35%, transparent);
+    background: color-mix(in srgb, #47cd89 12%, transparent);
+  }
+
+  .pill[data-ok="false"] {
+    color: #fdb022;
+    border-color: color-mix(in srgb, #fdb022 35%, transparent);
+    background: color-mix(in srgb, #fdb022 12%, transparent);
+  }
+}

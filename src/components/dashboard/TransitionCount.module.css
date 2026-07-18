@@ -1,0 +1,31 @@
+.count {
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.count[data-nonzero="false"] {
+  color: #027a48;
+  background: color-mix(in srgb, #027a48 12%, transparent);
+}
+
+.count[data-nonzero="true"] {
+  color: #b54708;
+  background: color-mix(in srgb, #b54708 14%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .count[data-nonzero="false"] {
+    color: #47cd89;
+    background: color-mix(in srgb, #47cd89 14%, transparent);
+  }
+
+  .count[data-nonzero="true"] {
+    color: #fdb022;
+    background: color-mix(in srgb, #fdb022 16%, transparent);
+  }
+}

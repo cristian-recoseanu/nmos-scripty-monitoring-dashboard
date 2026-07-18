@@ -1,0 +1,45 @@
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+}
+
+.icon[data-format="video"] {
+  color: #0b6bcb;
+}
+
+.icon[data-format="audio"] {
+  color: #027a48;
+}
+
+.icon[data-format="data"],
+.icon[data-format="data.event"] {
+  color: #b54708;
+}
+
+.icon[data-format="mux"] {
+  color: #6941c6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .icon[data-format="video"] {
+    color: #84caff;
+  }
+
+  .icon[data-format="audio"] {
+    color: #47cd89;
+  }
+
+  .icon[data-format="data"],
+  .icon[data-format="data.event"] {
+    color: #fdb022;
+  }
+
+  .icon[data-format="mux"] {
+    color: #bdb4fe;
+  }
+}

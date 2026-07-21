@@ -148,7 +148,36 @@ describe("buildSystemSnapshot / buildSelectionDetail", () => {
       expect(senderDetail.flow?.id).toBe("flow-1");
       expect(senderDetail.source?.id).toBe("source-1");
       expect(senderDetail.monitor?.oid).toBe(11);
+      expect(senderDetail.is05).toBeUndefined();
     }
+
+    const optionsWithIs05 = {
+      ...options,
+      getIs05: () => ({
+        resourceType: "sender" as const,
+        resourceId: "sender-1",
+        deviceId: "device-1",
+        status: "available" as const,
+        connectionApiHref: "http://device/x-nmos/connection/v1.1/",
+        active: {
+          receiver_id: null,
+          master_enable: true,
+          activation: {},
+          transport_params: [{ rtp_enabled: true }],
+        },
+        transportFile: { contentType: "application/sdp", data: "v=0" },
+        fetchedAt: 1,
+        sourceIs04Version: "1:0",
+      }),
+    };
+    const senderWithIs05 = buildSelectionDetail(
+      "sender",
+      "sender-1",
+      optionsWithIs05,
+    );
+    expect(senderWithIs05?.kind === "sender" && senderWithIs05.is05?.status).toBe(
+      "available",
+    );
 
     const receiverDetail = buildSelectionDetail(
       "receiver",

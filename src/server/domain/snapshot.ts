@@ -9,6 +9,8 @@ import type {
   NmosSource,
   Uuid,
 } from "@/server/is04";
+import type { Is05DetailDto } from "@/server/is05";
+import { toIs05DetailDto, type Is05CacheEntry } from "@/server/is05";
 import type {
   DeviceNcpStatus,
   DomainStatusSnapshot,
@@ -141,6 +143,7 @@ export type SelectionDetailDto =
       flow?: NmosFlow;
       source?: NmosSource;
       monitor?: MonitorDetailDto;
+      is05?: Is05DetailDto;
       deviceId: string;
     }
   | {
@@ -156,6 +159,7 @@ export type SelectionDetailDto =
         health: HealthSeverity;
       };
       monitor?: MonitorDetailDto;
+      is05?: Is05DetailDto;
       deviceId: string;
     };
 
@@ -253,6 +257,7 @@ export type SnapshotBuilderOptions = HealthAggregatorInput & {
   queryApiBaseUrl?: string;
   registryLastError?: string;
   systemLabel?: string;
+  getIs05?: (resourceId: string) => Is05CacheEntry | undefined;
 };
 
 /**
@@ -416,6 +421,7 @@ export function buildSelectionDetail(
       return undefined;
     }
     const monitor = options.getMonitor(id);
+    const is05Entry = options.getIs05?.(id);
     return {
       kind: "sender",
       id,
@@ -425,6 +431,7 @@ export function buildSelectionDetail(
       flow: resolved.flow,
       source: resolved.source,
       monitor: monitor ? monitorToDto(monitor) : undefined,
+      is05: is05Entry ? toIs05DetailDto(is05Entry) : undefined,
       deviceId: resolved.sender.device_id,
     };
   }
@@ -439,6 +446,7 @@ export function buildSelectionDetail(
     const connectedMonitor = connected
       ? options.getMonitor(connected.id)
       : undefined;
+    const is05Entry = options.getIs05?.(id);
 
     return {
       kind: "receiver",
@@ -455,6 +463,7 @@ export function buildSelectionDetail(
           }
         : undefined,
       monitor: monitor ? monitorToDto(monitor) : undefined,
+      is05: is05Entry ? toIs05DetailDto(is05Entry) : undefined,
       deviceId: resource.device_id,
     };
   }

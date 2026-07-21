@@ -361,6 +361,7 @@ describe("DetailPanel", () => {
 
     expect(screen.getByText("Domain statuses")).toBeInTheDocument();
     expect(screen.getAllByText("Healthy (1)").length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(screen.getByRole("tab", { name: "IS-04" }));
     fireEvent.click(screen.getByText(/Tx 1/));
     expect(onSelect).toHaveBeenCalledWith({
       kind: "sender",

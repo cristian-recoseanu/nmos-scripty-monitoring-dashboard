@@ -131,13 +131,95 @@ export type NmosResource =
   | NmosSource;
 
 export const NCP_CONTROL_TYPE_PREFIX = "urn:x-nmos:control:ncp";
+export const SR_CTRL_CONTROL_TYPE_PREFIX = "urn:x-nmos:control:sr-ctrl";
+export const RTP_TRANSPORT_PREFIX = "urn:x-nmos:transport:rtp";
 
 export function isNcpControlType(type: string): boolean {
   return type === NCP_CONTROL_TYPE_PREFIX || type.startsWith(`${NCP_CONTROL_TYPE_PREFIX}/`);
+}
+
+export function isSrCtrlControlType(type: string): boolean {
+  return (
+    type === SR_CTRL_CONTROL_TYPE_PREFIX ||
+    type.startsWith(`${SR_CTRL_CONTROL_TYPE_PREFIX}/`)
+  );
+}
+
+export function isRtpTransport(transport: string): boolean {
+  return (
+    transport === RTP_TRANSPORT_PREFIX ||
+    transport.startsWith(`${RTP_TRANSPORT_PREFIX}.`) ||
+    transport.startsWith(`${RTP_TRANSPORT_PREFIX}/`)
+  );
 }
 
 export function findNcpControl(
   controls: NmosControl[] | undefined,
 ): NmosControl | undefined {
   return controls?.find((control) => isNcpControlType(control.type));
+}
+
+/**
+ * Prefer the `sr-ctrl` control whose type version aligns with the href path
+ * (e.g. `…/v1.1` and `…/connection/v1.1/`). When several align, prefer the
+ * highest version. Falls back to the first match.
+ */
+export function findSrCtrlControl(
+  controls: NmosControl[] | undefined,
+): NmosControl | undefined {
+  const matches = controls?.filter((control) => isSrCtrlControlType(control.type)) ?? [];
+  if (matches.length === 0) {
+    return undefined;
+  }
+  if (matches.length === 1) {
+    return matches[0];
+  }
+
+  const aligned = matches.filter((control) => {
+    const typeVersion = controlTypeVersion(control.type);
+    const hrefVersion = hrefPathVersion(control.href);
+    return typeVersion && hrefVersion && typeVersion === hrefVersion;
+  });
+  const pool = aligned.length > 0 ? aligned : matches;
+  return pool.reduce((best, control) =>
+    compareVersions(
+      controlTypeVersion(control.type),
+      controlTypeVersion(best.type),
+    ) > 0
+      ? control
+      : best,
+  );
+}
+
+function controlTypeVersion(type: string): string | undefined {
+  const match = /\/(v\d+(?:\.\d+)*)$/i.exec(type);
+  return match?.[1]?.toLowerCase();
+}
+
+function hrefPathVersion(href: string): string | undefined {
+  const match = /\/(v\d+(?:\.\d+)*)(?:\/|$)/i.exec(href);
+  return match?.[1]?.toLowerCase();
+}
+
+/** Compare `v1.1` style versions; positive if a > b. */
+function compareVersions(a: string | undefined, b: string | undefined): number {
+  const parse = (value: string | undefined): number[] => {
+    if (!value) {
+      return [];
+    }
+    return value
+      .replace(/^v/i, "")
+      .split(".")
+      .map((part) => Number.parseInt(part, 10) || 0);
+  };
+  const left = parse(a);
+  const right = parse(b);
+  const len = Math.max(left.length, right.length);
+  for (let i = 0; i < len; i += 1) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0);
+    if (diff !== 0) {
+      return diff;
+    }
+  }
+  return 0;
 }

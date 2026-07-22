@@ -14,8 +14,14 @@ export function hasMonitoringContext(
   if (entity.kind === "sender" || entity.kind === "receiver") {
     return entity.meta?.hasMonitor === true;
   }
+  if (entity.kind === "group") {
+    return (entity.children ?? []).some(hasMonitoringContext);
+  }
   if (entity.kind === "device") {
-    return entity.meta?.ncpAvailability === "available";
+    return (
+      entity.meta?.ncpAvailability === "available" ||
+      (entity.children ?? []).some(hasMonitoringContext)
+    );
   }
   if (entity.kind === "node") {
     return (entity.children ?? []).some(hasMonitoringContext);
@@ -29,10 +35,15 @@ export function EntityCard({
   onSelect,
   showTransitions,
 }: {
-  entity: Pick<
-    TreeEntityDto,
-    "kind" | "id" | "label" | "health" | "totalTransitions" | "meta" | "children"
-  >;
+  entity: {
+    kind: Exclude<TreeEntityDto["kind"], "group">;
+    id: string;
+    label: string;
+    health: TreeEntityDto["health"];
+    totalTransitions?: number;
+    meta?: TreeEntityDto["meta"];
+    children?: TreeEntityDto["children"];
+  };
   selection: Selection;
   onSelect: (selection: Selection) => void;
   showTransitions: boolean;

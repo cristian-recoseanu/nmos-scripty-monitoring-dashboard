@@ -67,6 +67,7 @@ export class NcpOrchestrator extends EventEmitter {
   private readonly reconnectMaxMs?: number;
   private readonly sessions = new Map<Uuid, DeviceSession>();
   private readonly deviceStatus = new Map<Uuid, DeviceNcpStatus>();
+  private readonly harvestGeneration = new Map<Uuid, number>();
   readonly cache = new MonitorCache();
   private started = false;
 
@@ -145,7 +146,7 @@ export class NcpOrchestrator extends EventEmitter {
   }
 
   async resetMonitor(deviceId: Uuid, oid: number): Promise<void> {
-    const state = this.cache.get(oid);
+    const state = this.cache.get(deviceId, oid);
     if (!state || state.deviceId !== deviceId) {
       throw new Error(`Unknown monitor oid ${oid} for device ${deviceId}`);
     }
@@ -204,7 +205,7 @@ export class NcpOrchestrator extends EventEmitter {
       oid,
       value,
     );
-    const state = this.cache.get(oid);
+    const state = this.cache.get(deviceId, oid);
     if (state) {
       state.autoResetCountersAndMessages = value;
       state.lastUpdated = Date.now();
@@ -339,6 +340,11 @@ export class NcpOrchestrator extends EventEmitter {
 
     session.on("disconnected", () => {
       status.connected = false;
+      for (const state of this.cache.listForDevice(deviceId)) {
+        if (state.resourceId) {
+          this.store.setMonitorBinding(state.resourceId, undefined);
+        }
+      }
       this.cache.clearDevice(deviceId);
       this.emit("deviceStatus", status);
     });
@@ -352,7 +358,7 @@ export class NcpOrchestrator extends EventEmitter {
     });
 
     session.on("notification", (notification) => {
-      this.cache.applyNotification(notification);
+      this.cache.applyNotification(notification, deviceId);
     });
 
     session.on("readyError", (error: unknown) => {
@@ -370,13 +376,15 @@ export class NcpOrchestrator extends EventEmitter {
     session: Is12Session,
   ): Promise<void> {
     const log = childLogger(this.logger, { deviceId });
-    this.cache.clearDevice(deviceId);
+    const generation = (this.harvestGeneration.get(deviceId) ?? 0) + 1;
+    this.harvestGeneration.set(deviceId, generation);
 
     const monitors = await harvestMonitors(session);
     log.info({ count: monitors.length }, "Harvested monitors from device model");
 
     const oids: number[] = [];
     const seenResourceIds = new Set<string>();
+    const nextStates: MonitorState[] = [];
 
     for (const monitor of monitors) {
       try {
@@ -410,7 +418,13 @@ export class NcpOrchestrator extends EventEmitter {
           );
         }
 
-        await this.cache.loadMonitor(session, deviceId, monitor, link);
+        const state = await this.cache.readMonitorState(
+          session,
+          deviceId,
+          monitor,
+          link,
+        );
+        nextStates.push(state);
         oids.push(monitor.oid);
       } catch (error) {
         log.warn(
@@ -420,12 +434,24 @@ export class NcpOrchestrator extends EventEmitter {
       }
     }
 
+    if (this.harvestGeneration.get(deviceId) !== generation) {
+      log.debug({ generation }, "Ignoring stale harvest result");
+      return;
+    }
+
+    // Atomic per-device swap — never clears other devices; keeps prior state
+    // visible until the new slice is ready.
+    this.cache.replaceDevice(deviceId, nextStates);
+
     if (oids.length > 0) {
       const subscribed = await session.subscribe(oids);
       log.info({ subscribed }, "Subscribed to monitor property changes");
     }
 
-    this.emit("harvested", { deviceId, monitors: this.cache.listForDevice(deviceId) });
+    this.emit("harvested", {
+      deviceId,
+      monitors: this.cache.listForDevice(deviceId),
+    });
   }
 
   private async teardownDevice(deviceId: Uuid): Promise<void> {

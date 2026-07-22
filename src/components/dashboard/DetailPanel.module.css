@@ -1,5 +1,6 @@
 .panel {
-  min-height: 100%;
+  /* Parent `.detailScroll` owns the pane scrollbar. */
+  min-height: min-content;
 }
 
 .header {

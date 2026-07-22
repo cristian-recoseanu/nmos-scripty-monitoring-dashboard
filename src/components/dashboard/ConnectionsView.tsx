@@ -1,112 +1,118 @@
 "use client";
 
-import {
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useMemo, type ReactNode } from "react";
 
 import type {
   ConnectionHubDto,
   ConnectionsSnapshotDto,
-  TreeEntityDto,
+  LeafTreeEntityDto,
 } from "@/server/domain/snapshot";
 import { EntityCard, hasMonitoringContext } from "./EntityCard";
+import { HealthBadge } from "./HealthBadge";
+import { FormatIcon } from "./FormatIcon";
+import { TransitionCount } from "./TransitionCount";
 import type { Selection } from "./useDashboardState";
 import styles from "./ConnectionsView.module.css";
 
-const LINK_WIDTH_PX = 56;
-
-function ReceiverCard({
-  receiver,
-  selection,
-  onSelect,
-}: {
-  receiver: TreeEntityDto;
-  selection: Selection;
-  onSelect: (selection: Selection) => void;
-}) {
-  return (
-    <EntityCard
-      entity={receiver}
-      selection={selection}
-      onSelect={onSelect}
-      showTransitions={hasMonitoringContext(receiver)}
-    />
+function pickPinned(
+  members: LeafTreeEntityDto[],
+  selection: Selection,
+): LeafTreeEntityDto | undefined {
+  const selected = members.find(
+    (member) =>
+      member.kind === "receiver" &&
+      selection.kind === "receiver" &&
+      selection.id === member.id,
   );
+  if (selected) {
+    return selected;
+  }
+  const worst = [...members].sort((a, b) => {
+    const rank = {
+      unhealthy: 0,
+      degraded: 1,
+      unknown: 2,
+      healthy: 3,
+      inactive: 4,
+    };
+    return rank[a.health] - rank[b.health];
+  })[0];
+  return worst ?? members[0];
 }
 
-/** Fan of 2+ receivers with SVG spokes from the hub join to each card. */
-function ReceiverFan({
+/** Compact receiver strip + one pinned card (scales to large fan-outs). */
+function ReceiverStrip({
   receivers,
   selection,
   onSelect,
 }: {
-  receivers: TreeEntityDto[];
+  receivers: LeafTreeEntityDto[];
   selection: Selection;
   onSelect: (selection: Selection) => void;
 }) {
-  const stackRef = useRef<HTMLDivElement>(null);
-  const [geometry, setGeometry] = useState<{
-    height: number;
-    targets: number[];
-  }>({ height: 0, targets: [] });
-
-  useLayoutEffect(() => {
-    const stack = stackRef.current;
-    if (!stack) {
-      return;
-    }
-
-    const measure = () => {
-      const stackRect = stack.getBoundingClientRect();
-      const targets = Array.from(stack.children, (child) => {
-        const rect = (child as HTMLElement).getBoundingClientRect();
-        return rect.top + rect.height / 2 - stackRect.top;
-      });
-      setGeometry({ height: stackRect.height, targets });
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(stack);
-    for (const child of stack.children) {
-      observer.observe(child);
-    }
-    return () => observer.disconnect();
-  }, [receivers]);
-
-  const hubY = geometry.height / 2;
+  const pinned = useMemo(
+    () => pickPinned(receivers, selection),
+    [receivers, selection],
+  );
 
   return (
-    <div className={styles.fan}>
-      <svg
-        className={styles.wires}
-        width={LINK_WIDTH_PX}
-        height={Math.max(geometry.height, 1)}
-        aria-hidden="true"
-      >
-        {geometry.targets.map((y, index) => (
-          <line
-            key={receivers[index]?.id ?? index}
-            className={styles.wire}
-            x1={0}
-            y1={hubY}
-            x2={LINK_WIDTH_PX}
-            y2={y}
-          />
-        ))}
-      </svg>
-      <div ref={stackRef} className={styles.stack}>
-        {receivers.map((receiver) => (
-          <ReceiverCard
-            key={receiver.id}
-            receiver={receiver}
-            selection={selection}
-            onSelect={onSelect}
-          />
-        ))}
+    <div className={styles.stripPanel}>
+      <span className={styles.link} aria-hidden="true" />
+      <div className={styles.stripCard}>
+        <div className={styles.stripHeader}>
+          <span className={styles.stripTitle}>Receivers</span>
+          <span
+            className={styles.stripCount}
+            title={`${receivers.length} ${receivers.length === 1 ? "receiver" : "receivers"}`}
+          >
+            {receivers.length}
+          </span>
+        </div>
+        <p className={styles.stripHint}>Click a light to select</p>
+        <div
+          className={styles.strip}
+          role="group"
+          aria-label="Receivers — click a light to select"
+        >
+          {receivers.map((receiver) => {
+            const isSelected =
+              selection.kind === "receiver" && selection.id === receiver.id;
+            return (
+              <button
+                key={receiver.id}
+                type="button"
+                className={`${styles.light} ${isSelected ? styles.lightSelected : ""}`}
+                title={`${isSelected ? "Selected: " : "Select: "}${receiver.label} (${receiver.health})`}
+                aria-label={`${isSelected ? "Selected" : "Select"} ${receiver.label}`}
+                aria-pressed={isSelected}
+                onClick={() =>
+                  onSelect({ kind: "receiver", id: receiver.id })
+                }
+              >
+                <HealthBadge
+                  health={receiver.health}
+                  size="sm"
+                  showLabel={false}
+                />
+              </button>
+            );
+          })}
+        </div>
+        {pinned ? (
+          <div className={styles.pinned}>
+            <span className={styles.pinnedIcons}>
+              {pinned.meta?.format ? (
+                <FormatIcon format={pinned.meta.format} />
+              ) : null}
+            </span>
+            <span className={styles.pinnedLabel} title={pinned.label}>
+              {pinned.label}
+            </span>
+            {hasMonitoringContext(pinned) ? (
+              <TransitionCount count={pinned.totalTransitions ?? 0} />
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -117,7 +123,7 @@ function OrbitGroup({
   selection,
   onSelect,
 }: {
-  hub: { anchor: ReactNode; receivers: TreeEntityDto[] };
+  hub: { anchor: ReactNode; receivers: LeafTreeEntityDto[] };
   selection: Selection;
   onSelect: (selection: Selection) => void;
 }) {
@@ -128,17 +134,8 @@ function OrbitGroup({
       <div className={styles.anchor}>{hub.anchor}</div>
       {count === 0 ? (
         <div className={styles.emptyOrbit} aria-hidden="true" />
-      ) : count === 1 ? (
-        <div className={styles.single}>
-          <span className={styles.link} aria-hidden="true" />
-          <ReceiverCard
-            receiver={hub.receivers[0]!}
-            selection={selection}
-            onSelect={onSelect}
-          />
-        </div>
       ) : (
-        <ReceiverFan
+        <ReceiverStrip
           receivers={hub.receivers}
           selection={selection}
           onSelect={onSelect}

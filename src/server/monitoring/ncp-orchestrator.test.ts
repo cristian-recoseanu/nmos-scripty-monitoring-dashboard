@@ -209,7 +209,7 @@ describe("NcpOrchestrator", () => {
         ],
       }),
     });
-    expect(orchestrator.cache.get(10)?.health).toBe("healthy");
+    expect(orchestrator.cache.get("device-1", 10)?.health).toBe("healthy");
 
     const resetAll = await orchestrator.resetAllMonitors();
     expect(resetAll.reset).toBeGreaterThanOrEqual(1);

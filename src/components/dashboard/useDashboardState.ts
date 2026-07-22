@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { EntityKind } from "@/server/domain";
@@ -48,11 +54,7 @@ function parseSelection(
   kindParam: string | null,
   idParam: string | null,
 ): Selection {
-  if (
-    kindParam &&
-    idParam &&
-    VALID_KINDS.has(kindParam as EntityKind)
-  ) {
+  if (kindParam && idParam && VALID_KINDS.has(kindParam as EntityKind)) {
     return { kind: kindParam as EntityKind, id: idParam };
   }
   return { kind: "system", id: "system" };
@@ -80,6 +82,7 @@ export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
   const [snapshot, setSnapshot] = useState(() =>
     ensureSnapshotConnections(initialSnapshot),
   );
+  const deferredSnapshot = useDeferredValue(snapshot);
   const [detail, setDetail] = useState<SelectionDetailDto | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
@@ -98,12 +101,19 @@ export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
 
   const setView = useCallback(
     (next: DashboardView) => {
+      const current = parseView(searchParams.get("view"));
+      if (next === current) {
+        return;
+      }
       const params = new URLSearchParams(searchParams.toString());
       if (next === "system") {
         params.delete("view");
       } else {
         params.set("view", next);
       }
+      // Drop selection when switching topology views so detail doesn't carry over.
+      params.delete("kind");
+      params.delete("id");
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [pathname, router, searchParams],
@@ -130,12 +140,16 @@ export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
     return () => source.close();
   }, []);
 
+  // Detail follows selection; refresh periodically without tying to every SSE tick.
   useEffect(() => {
     let cancelled = false;
+    let first = true;
 
     async function loadDetail() {
-      setDetailLoading(true);
-      setDetailError(null);
+      if (first) {
+        setDetailLoading(true);
+        setDetailError(null);
+      }
       try {
         const response = await fetch(
           `/api/detail?kind=${encodeURIComponent(selection.kind)}&id=${encodeURIComponent(selection.id)}`,
@@ -150,26 +164,32 @@ export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
         const body = (await response.json()) as SelectionDetailDto;
         if (!cancelled) {
           setDetail(body);
+          setDetailError(null);
         }
       } catch (error) {
         if (!cancelled) {
-          setDetail(null);
+          if (first) {
+            setDetail(null);
+          }
           setDetailError(
             error instanceof Error ? error.message : "Failed to load detail",
           );
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && first) {
           setDetailLoading(false);
+          first = false;
         }
       }
     }
 
     void loadDetail();
+    const refresh = setInterval(() => void loadDetail(), 2_000);
     return () => {
       cancelled = true;
+      clearInterval(refresh);
     };
-  }, [selection.kind, selection.id, snapshot.generatedAt]);
+  }, [selection.kind, selection.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,10 +213,10 @@ export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [snapshot.generatedAt]);
+  }, []);
 
   return {
-    snapshot,
+    snapshot: deferredSnapshot,
     selection,
     setSelection,
     view,

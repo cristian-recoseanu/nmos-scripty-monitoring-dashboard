@@ -1,16 +1,21 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
 import type {
   SystemSnapshotDto,
   TreeEntityDto,
 } from "@/server/domain/snapshot";
+import type { EntityKind } from "@/server/domain";
 import { EntityCard, hasMonitoringContext } from "./EntityCard";
+import { ResourceGroupCard } from "./ResourceGroupCard";
 import type { Selection } from "./useDashboardState";
 import styles from "./SystemTree.module.css";
 
 type BranchItem = { key: string; node: ReactNode };
+type SelectableEntity = TreeEntityDto & { kind: EntityKind };
+type DeviceEntity = TreeEntityDto & { kind: "device" };
+type NodeEntity = TreeEntityDto & { kind: "node" };
 
 /** Parent card with optional children joined by stem + sibling rail. */
 function Branch({
@@ -40,12 +45,12 @@ function Branch({
   );
 }
 
-function DeviceBranch({
+const DeviceBranch = memo(function DeviceBranch({
   device,
   selection,
   onSelect,
 }: {
-  device: TreeEntityDto;
+  device: DeviceEntity;
   selection: Selection;
   onSelect: (selection: Selection) => void;
 }) {
@@ -59,27 +64,34 @@ function DeviceBranch({
           showTransitions={hasMonitoringContext(device)}
         />
       }
-      items={device.children?.map((leaf) => ({
-        key: `${leaf.kind}:${leaf.id}`,
-        node: (
-          <EntityCard
-            entity={leaf}
-            selection={selection}
-            onSelect={onSelect}
-            showTransitions={hasMonitoringContext(leaf)}
-          />
-        ),
+      items={device.children?.map((child) => ({
+        key: `${child.kind}:${child.id}`,
+        node:
+          child.kind === "group" ? (
+            <ResourceGroupCard
+              group={child}
+              selection={selection}
+              onSelect={onSelect}
+            />
+          ) : (
+            <EntityCard
+              entity={child as SelectableEntity}
+              selection={selection}
+              onSelect={onSelect}
+              showTransitions={hasMonitoringContext(child)}
+            />
+          ),
       }))}
     />
   );
-}
+});
 
-function NodeBranch({
+const NodeBranch = memo(function NodeBranch({
   node,
   selection,
   onSelect,
 }: {
-  node: TreeEntityDto;
+  node: NodeEntity;
   selection: Selection;
   onSelect: (selection: Selection) => void;
 }) {
@@ -93,19 +105,21 @@ function NodeBranch({
           showTransitions={hasMonitoringContext(node)}
         />
       }
-      items={node.children?.map((device) => ({
-        key: `${device.kind}:${device.id}`,
-        node: (
-          <DeviceBranch
-            device={device}
-            selection={selection}
-            onSelect={onSelect}
-          />
-        ),
-      }))}
+      items={node.children
+        ?.filter((device): device is DeviceEntity => device.kind === "device")
+        .map((device) => ({
+          key: `${device.kind}:${device.id}`,
+          node: (
+            <DeviceBranch
+              device={device}
+              selection={selection}
+              onSelect={onSelect}
+            />
+          ),
+        }))}
     />
   );
-}
+});
 
 export function SystemTree({
   system,
@@ -138,16 +152,18 @@ export function SystemTree({
           parent={systemCard}
           items={
             system.children.length > 0
-              ? system.children.map((node) => ({
-                  key: `${node.kind}:${node.id}`,
-                  node: (
-                    <NodeBranch
-                      node={node}
-                      selection={selection}
-                      onSelect={onSelect}
-                    />
-                  ),
-                }))
+              ? system.children
+                  .filter((node): node is NodeEntity => node.kind === "node")
+                  .map((node) => ({
+                    key: `${node.kind}:${node.id}`,
+                    node: (
+                      <NodeBranch
+                        node={node}
+                        selection={selection}
+                        onSelect={onSelect}
+                      />
+                    ),
+                  }))
               : undefined
           }
         />

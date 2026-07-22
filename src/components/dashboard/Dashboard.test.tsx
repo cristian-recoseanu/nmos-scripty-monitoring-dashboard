@@ -160,7 +160,7 @@ describe("ConnectionsView", () => {
     expect(screen.getByText("Disconnected")).toBeInTheDocument();
     expect(screen.getByText("Rx free")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Rx connected"));
+    fireEvent.click(screen.getByLabelText("Select Rx connected"));
     expect(onSelect).toHaveBeenCalledWith({
       kind: "receiver",
       id: "receiver-1",

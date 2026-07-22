@@ -77,6 +77,24 @@ const PROPERTY_GET_LIST: NcElementId[] = [
   PROP_AUTO_RESET_COUNTERS,
 ];
 
+function monitorKey(deviceId: string, oid: NcOid): string {
+  return `${deviceId}:${oid}`;
+}
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) {
+    return true;
+  }
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
+    return false;
+  }
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 function domainFrom(
   status?: unknown,
   message?: unknown,
@@ -85,49 +103,71 @@ function domainFrom(
   return {
     status: status as number | string | undefined,
     message: (message as string | null | undefined) ?? null,
-    transitionCounter:
-      typeof counter === "number" ? counter : undefined,
+    transitionCounter: typeof counter === "number" ? counter : undefined,
   };
 }
 
+/**
+ * Cache of BCP-008 monitor state.
+ *
+ * Keys are `${deviceId}:${oid}` because MS-05 OIDs are device-local; a global
+ * oid map would let one device overwrite another's monitors.
+ */
 export class MonitorCache extends EventEmitter {
-  private readonly byOid = new Map<NcOid, MonitorState>();
-  private readonly oidByResourceId = new Map<string, NcOid>();
+  private readonly byKey = new Map<string, MonitorState>();
+  private readonly keyByResourceId = new Map<string, string>();
 
-  get(oid: NcOid): MonitorState | undefined {
-    return this.byOid.get(oid);
+  get(deviceId: string, oid: NcOid): MonitorState | undefined {
+    return this.byKey.get(monitorKey(deviceId, oid));
   }
 
   getByResourceId(resourceId: string): MonitorState | undefined {
-    const oid = this.oidByResourceId.get(resourceId);
-    return oid === undefined ? undefined : this.byOid.get(oid);
+    const key = this.keyByResourceId.get(resourceId);
+    return key === undefined ? undefined : this.byKey.get(key);
   }
 
   listForDevice(deviceId: string): MonitorState[] {
-    return [...this.byOid.values()].filter(
-      (state) => state.deviceId === deviceId,
-    );
+    return [...this.byKey.values()].filter((state) => state.deviceId === deviceId);
   }
 
   listAll(): MonitorState[] {
-    return [...this.byOid.values()];
+    return [...this.byKey.values()];
   }
 
   clearDevice(deviceId: string): void {
-    for (const [oid, state] of this.byOid.entries()) {
+    for (const [key, state] of this.byKey.entries()) {
       if (state.deviceId === deviceId) {
         if (state.resourceId) {
-          this.oidByResourceId.delete(state.resourceId);
+          this.keyByResourceId.delete(state.resourceId);
         }
-        this.byOid.delete(oid);
+        this.byKey.delete(key);
       }
     }
     this.emit("cleared", { deviceId });
   }
 
+  /**
+   * Atomically replace all monitors for a device (avoids a long empty window
+   * and never touches other devices' entries).
+   */
+  replaceDevice(deviceId: string, states: MonitorState[]): void {
+    for (const [key, state] of this.byKey.entries()) {
+      if (state.deviceId === deviceId) {
+        if (state.resourceId) {
+          this.keyByResourceId.delete(state.resourceId);
+        }
+        this.byKey.delete(key);
+      }
+    }
+    for (const state of states) {
+      this.put(state, { emit: true });
+    }
+    this.emit("replaced", { deviceId, count: states.length });
+  }
+
   clear(): void {
-    this.byOid.clear();
-    this.oidByResourceId.clear();
+    this.byKey.clear();
+    this.keyByResourceId.clear();
   }
 
   async loadMonitor(
@@ -147,19 +187,53 @@ export class MonitorCache extends EventEmitter {
     }
 
     const state = this.buildState(deviceId, monitor, link, values);
-    this.put(state);
+    this.put(state, { emit: true });
     return state;
   }
 
-  applyNotification(notification: Is12Notification): MonitorState | undefined {
-    const state = this.byOid.get(notification.oid);
+  /**
+   * Load monitor properties without mutating the cache (for atomic harvest swap).
+   */
+  async readMonitorState(
+    session: Is12Session,
+    deviceId: string,
+    monitor: DiscoveredMonitor,
+    link: MonitorTouchpointLink,
+  ): Promise<MonitorState> {
+    const values = new Map<string, unknown>();
+    for (const propertyId of PROPERTY_GET_LIST) {
+      try {
+        const value = await session.getProperty(monitor.oid, propertyId);
+        values.set(elementIdKey(propertyId), value);
+      } catch {
+        // Property may be missing on vendor variants; leave undefined.
+      }
+    }
+    return this.buildState(deviceId, monitor, link, values);
+  }
+
+  /**
+   * Apply a property notification for a specific device.
+   * Returns undefined when the monitor is unknown or the value is unchanged.
+   */
+  applyNotification(
+    notification: Is12Notification,
+    deviceId: string,
+  ): MonitorState | undefined {
+    const state = this.byKey.get(monitorKey(deviceId, notification.oid));
     if (!state || !notification.eventData?.propertyId) {
       return undefined;
     }
 
     const propertyId = notification.eventData.propertyId;
     const value = notification.eventData.value;
+    const before = snapshotProperty(state, propertyId);
     this.applyProperty(state, propertyId, value);
+    const after = snapshotProperty(state, propertyId);
+    if (valuesEqual(before, after)) {
+      return undefined;
+    }
+
     state.health = mapOverallStatus(
       overallStatusName(state.overallStatus) ?? state.overallStatus,
     );
@@ -168,16 +242,27 @@ export class MonitorCache extends EventEmitter {
     return state;
   }
 
-  private put(state: MonitorState): void {
-    const previous = this.byOid.get(state.oid);
+  private put(state: MonitorState, options: { emit: boolean }): void {
+    const key = monitorKey(state.deviceId, state.oid);
+    const previous = this.byKey.get(key);
     if (previous?.resourceId && previous.resourceId !== state.resourceId) {
-      this.oidByResourceId.delete(previous.resourceId);
+      this.keyByResourceId.delete(previous.resourceId);
     }
-    this.byOid.set(state.oid, state);
+    this.byKey.set(key, state);
     if (state.resourceId) {
-      this.oidByResourceId.set(state.resourceId, state.oid);
+      // Drop any stale mapping from another device that claimed this resource.
+      const existingKey = this.keyByResourceId.get(state.resourceId);
+      if (existingKey && existingKey !== key) {
+        const other = this.byKey.get(existingKey);
+        if (other) {
+          other.resourceId = undefined;
+        }
+      }
+      this.keyByResourceId.set(state.resourceId, key);
     }
-    this.emit("updated", state);
+    if (options.emit) {
+      this.emit("updated", state);
+    }
   }
 
   private buildState(
@@ -333,6 +418,71 @@ export class MonitorCache extends EventEmitter {
       };
     }
   }
+}
+
+function snapshotProperty(
+  state: MonitorState,
+  propertyId: NcElementId,
+): unknown {
+  if (elementIdsEqual(propertyId, PROP_OVERALL_STATUS)) {
+    return state.overallStatus;
+  }
+  if (elementIdsEqual(propertyId, PROP_OVERALL_STATUS_MESSAGE)) {
+    return state.overallStatusMessage;
+  }
+  if (elementIdsEqual(propertyId, PROP_STATUS_REPORTING_DELAY)) {
+    return state.statusReportingDelay;
+  }
+  if (elementIdsEqual(propertyId, PROP_AUTO_RESET_COUNTERS)) {
+    return state.autoResetCountersAndMessages;
+  }
+  if (elementIdsEqual(propertyId, PROP_LINK_STATUS)) {
+    return state.link?.status;
+  }
+  if (elementIdsEqual(propertyId, PROP_LINK_STATUS_MESSAGE)) {
+    return state.link?.message;
+  }
+  if (elementIdsEqual(propertyId, PROP_LINK_STATUS_TRANSITION_COUNTER)) {
+    return state.link?.transitionCounter;
+  }
+  if (elementIdsEqual(propertyId, PROP_CONNECTION_OR_TRANSMISSION_STATUS)) {
+    return state.connectivity?.status;
+  }
+  if (
+    elementIdsEqual(propertyId, PROP_CONNECTION_OR_TRANSMISSION_STATUS_MESSAGE)
+  ) {
+    return state.connectivity?.message;
+  }
+  if (
+    elementIdsEqual(
+      propertyId,
+      PROP_CONNECTION_OR_TRANSMISSION_TRANSITION_COUNTER,
+    )
+  ) {
+    return state.connectivity?.transitionCounter;
+  }
+  if (elementIdsEqual(propertyId, PROP_EXTERNAL_SYNC_STATUS)) {
+    return state.externalSync?.status;
+  }
+  if (elementIdsEqual(propertyId, PROP_EXTERNAL_SYNC_STATUS_MESSAGE)) {
+    return state.externalSync?.message;
+  }
+  if (elementIdsEqual(propertyId, PROP_EXTERNAL_SYNC_TRANSITION_COUNTER)) {
+    return state.externalSync?.transitionCounter;
+  }
+  if (elementIdsEqual(propertyId, PROP_SYNC_SOURCE_ID)) {
+    return state.synchronizationSourceId;
+  }
+  if (elementIdsEqual(propertyId, PROP_STREAM_OR_ESSENCE_STATUS)) {
+    return state.streamOrEssence?.status;
+  }
+  if (elementIdsEqual(propertyId, PROP_STREAM_OR_ESSENCE_STATUS_MESSAGE)) {
+    return state.streamOrEssence?.message;
+  }
+  if (elementIdsEqual(propertyId, PROP_STREAM_OR_ESSENCE_TRANSITION_COUNTER)) {
+    return state.streamOrEssence?.transitionCounter;
+  }
+  return undefined;
 }
 
 export type NcCounter = {

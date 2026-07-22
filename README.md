@@ -6,8 +6,8 @@ Next.js (App Router, SSR) monitoring application that harvests an IS-04 Query AP
 
 ## Requirements
 
-- Node.js 20+
-- npm 10+
+- Node.js 24+ (Active LTS)
+- npm 11+
 
 ## Quick start
 

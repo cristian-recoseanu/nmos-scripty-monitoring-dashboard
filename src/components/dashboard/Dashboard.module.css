@@ -1,7 +1,10 @@
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
@@ -13,6 +16,7 @@
   padding: 0.9rem 1.25rem;
   border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .title {
@@ -80,6 +84,7 @@
   font-size: 0.8rem;
   background: color-mix(in srgb, #b54708 12%, transparent);
   border-bottom: 1px solid color-mix(in srgb, #b54708 25%, transparent);
+  flex-shrink: 0;
 }
 
 .bannerOk {
@@ -87,19 +92,23 @@
   font-size: 0.8rem;
   background: color-mix(in srgb, #027a48 12%, transparent);
   border-bottom: 1px solid color-mix(in srgb, #027a48 25%, transparent);
+  flex-shrink: 0;
 }
 
 .split {
   display: grid;
-  grid-template-rows: minmax(16rem, 1fr) minmax(16rem, 1fr);
-  flex: 1;
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .top,
 .bottom {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 0.85rem 1.25rem 1.1rem;
 }
 
@@ -113,6 +122,14 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.65rem;
+  flex-shrink: 0;
+}
+
+.viewScroll,
+.detailScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .tabs {
@@ -165,17 +182,7 @@
   line-height: 1.5;
   max-width: 40rem;
   margin-bottom: 0.75rem;
-}
-
-@media (max-width: 720px) {
-  .split {
-    grid-template-rows: auto auto;
-  }
-
-  .top,
-  .bottom {
-    max-height: none;
-  }
+  flex-shrink: 0;
 }
 
 @media (prefers-color-scheme: dark) {

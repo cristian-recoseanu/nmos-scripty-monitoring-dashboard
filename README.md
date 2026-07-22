@@ -4,6 +4,8 @@
 
 Next.js (App Router, SSR) monitoring application that harvests an IS-04 Query API registry and BCP-008 sender/receiver monitors via IS-12 / MS-05-02, then presents a traffic-light system view.
 
+![NMOS System Monitoring Dashboard](./screenshot.png)
+
 ## Requirements
 
 - Node.js 24+ (Active LTS)

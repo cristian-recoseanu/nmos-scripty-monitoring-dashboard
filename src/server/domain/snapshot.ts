@@ -9,6 +9,8 @@ import type {
   NmosSource,
   Uuid,
 } from "@/server/is04";
+import type { Is05DetailDto } from "@/server/is05";
+import { toIs05DetailDto, type Is05CacheEntry } from "@/server/is05";
 import type {
   DeviceNcpStatus,
   DomainStatusSnapshot,
@@ -27,11 +29,12 @@ import {
   type NodeHealth,
   type SystemHealth,
 } from "./health-aggregator";
+import { aggregateParentHealth } from "@/lib/health";
 
 export type { EntityKind, HealthContributor };
 
 export type TreeEntityDto = {
-  kind: EntityKind;
+  kind: EntityKind | "group";
   id: string;
   label: string;
   health: HealthSeverity;
@@ -44,17 +47,24 @@ export type TreeEntityDto = {
     ncpConnected?: boolean;
     /** NMOS format kind for senders/receivers (from flow/source/receiver). */
     format?: NmosFormatKind;
+    /** Synthetic Senders/Receivers group under a device. */
+    group?: "senders" | "receivers";
   };
 };
 
+/** Sender/receiver leaf used in connections hubs and group members. */
+export type LeafTreeEntityDto = TreeEntityDto & {
+  kind: "sender" | "receiver";
+};
+
 export type ConnectionHubDto = {
-  sender: TreeEntityDto;
-  receivers: TreeEntityDto[];
+  sender: LeafTreeEntityDto;
+  receivers: LeafTreeEntityDto[];
 };
 
 export type ConnectionsSnapshotDto = {
   hubs: ConnectionHubDto[];
-  disconnected: TreeEntityDto[];
+  disconnected: LeafTreeEntityDto[];
 };
 
 export type SystemSnapshotDto = {
@@ -141,6 +151,7 @@ export type SelectionDetailDto =
       flow?: NmosFlow;
       source?: NmosSource;
       monitor?: MonitorDetailDto;
+      is05?: Is05DetailDto;
       deviceId: string;
     }
   | {
@@ -156,6 +167,7 @@ export type SelectionDetailDto =
         health: HealthSeverity;
       };
       monitor?: MonitorDetailDto;
+      is05?: Is05DetailDto;
       deviceId: string;
     };
 
@@ -202,7 +214,7 @@ export function monitorToDto(state: MonitorState): MonitorDetailDto {
   };
 }
 
-function leafToTree(leaf: LeafHealth): TreeEntityDto {
+function leafToTree(leaf: LeafHealth): LeafTreeEntityDto {
   return {
     kind: leaf.kind,
     id: leaf.id,
@@ -215,10 +227,41 @@ function leafToTree(leaf: LeafHealth): TreeEntityDto {
 }
 
 function deviceToTree(device: DeviceHealth): TreeEntityDto {
-  const children: TreeEntityDto[] = [
-    ...device.senders.map(leafToTree),
-    ...device.receivers.map(leafToTree),
-  ];
+  const children: TreeEntityDto[] = [];
+
+  if (device.senders.length > 0) {
+    const senderLeaves = device.senders.map(leafToTree);
+    children.push({
+      kind: "group",
+      id: `${device.id}:senders`,
+      label: "Senders",
+      health: aggregateParentHealth(device.senders.map((leaf) => leaf.health)),
+      childCount: senderLeaves.length,
+      totalTransitions: device.senders.reduce(
+        (sum, leaf) => sum + leaf.totalTransitions,
+        0,
+      ),
+      children: senderLeaves,
+      meta: { group: "senders" },
+    });
+  }
+
+  if (device.receivers.length > 0) {
+    const receiverLeaves = device.receivers.map(leafToTree);
+    children.push({
+      kind: "group",
+      id: `${device.id}:receivers`,
+      label: "Receivers",
+      health: aggregateParentHealth(device.receivers.map((leaf) => leaf.health)),
+      childCount: receiverLeaves.length,
+      totalTransitions: device.receivers.reduce(
+        (sum, leaf) => sum + leaf.totalTransitions,
+        0,
+      ),
+      children: receiverLeaves,
+      meta: { group: "receivers" },
+    });
+  }
 
   return {
     kind: "device",
@@ -253,6 +296,7 @@ export type SnapshotBuilderOptions = HealthAggregatorInput & {
   queryApiBaseUrl?: string;
   registryLastError?: string;
   systemLabel?: string;
+  getIs05?: (resourceId: string) => Is05CacheEntry | undefined;
 };
 
 /**
@@ -277,7 +321,7 @@ export function buildConnectionsSnapshot(
     }
   }
 
-  const disconnected: TreeEntityDto[] = [];
+  const disconnected: LeafTreeEntityDto[] = [];
 
   for (const node of system.nodes) {
     for (const device of node.devices) {
@@ -416,6 +460,7 @@ export function buildSelectionDetail(
       return undefined;
     }
     const monitor = options.getMonitor(id);
+    const is05Entry = options.getIs05?.(id);
     return {
       kind: "sender",
       id,
@@ -425,6 +470,7 @@ export function buildSelectionDetail(
       flow: resolved.flow,
       source: resolved.source,
       monitor: monitor ? monitorToDto(monitor) : undefined,
+      is05: is05Entry ? toIs05DetailDto(is05Entry) : undefined,
       deviceId: resolved.sender.device_id,
     };
   }
@@ -439,6 +485,7 @@ export function buildSelectionDetail(
     const connectedMonitor = connected
       ? options.getMonitor(connected.id)
       : undefined;
+    const is05Entry = options.getIs05?.(id);
 
     return {
       kind: "receiver",
@@ -455,6 +502,7 @@ export function buildSelectionDetail(
           }
         : undefined,
       monitor: monitor ? monitorToDto(monitor) : undefined,
+      is05: is05Entry ? toIs05DetailDto(is05Entry) : undefined,
       deviceId: resource.device_id,
     };
   }

@@ -380,15 +380,18 @@ describe("MonitorCache", () => {
     expect(state.overallStatusMessage).toBe("ok");
     expect(cache.getByResourceId("rx-1")?.oid).toBe(10);
 
-    cache.applyNotification({
-      oid: 10,
-      eventId: { level: 1, index: 1 },
-      eventData: {
-        propertyId: PROP_OVERALL_STATUS,
-        value: 3,
+    cache.applyNotification(
+      {
+        oid: 10,
+        eventId: { level: 1, index: 1 },
+        eventData: {
+          propertyId: PROP_OVERALL_STATUS,
+          value: 3,
+        },
       },
-    });
-    expect(cache.get(10)?.health).toBe("unhealthy");
+      "device-1",
+    );
+    expect(cache.get("device-1", 10)?.health).toBe("unhealthy");
 
     await session.stop();
   });

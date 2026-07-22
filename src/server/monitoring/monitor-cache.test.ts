@@ -151,14 +151,17 @@ describe("MonitorCache notifications", () => {
     ];
 
     for (const [propertyId, value] of updates) {
-      cache.applyNotification({
-        oid: 11,
-        eventId: { level: 1, index: 1 },
-        eventData: { propertyId, value },
-      });
+      cache.applyNotification(
+        {
+          oid: 11,
+          eventId: { level: 1, index: 1 },
+          eventData: { propertyId, value },
+        },
+        "d1",
+      );
     }
 
-    const state = cache.get(11)!;
+    const state = cache.get("d1", 11)!;
     expect(state.health).toBe("inactive");
     expect(state.overallStatusMessage).toBe("idle");
     expect(state.statusReportingDelay).toBe(3);
@@ -176,6 +179,89 @@ describe("MonitorCache notifications", () => {
     cache.clearDevice("d1");
     expect(cache.listForDevice("d1")).toEqual([]);
     expect(cache.listAll()).toEqual([]);
+
+    await session.stop();
+  });
+
+  it("isolates monitors that share the same OID across devices", async () => {
+    const { session: sessionA } = openSession(() => ({ status: 200, value: 1 }));
+    const { session: sessionB } = openSession(() => ({ status: 200, value: 3 }));
+    const cache = new MonitorCache();
+
+    await cache.loadMonitor(
+      sessionA,
+      "device-a",
+      {
+        kind: "sender",
+        oid: 10,
+        role: "Sender_A",
+        classId: [1, 2, 2, 2],
+      },
+      { monitorOid: 10, resourceType: "sender", resourceId: "sender-a" },
+    );
+    await cache.loadMonitor(
+      sessionB,
+      "device-b",
+      {
+        kind: "sender",
+        oid: 10,
+        role: "Sender_B",
+        classId: [1, 2, 2, 2],
+      },
+      { monitorOid: 10, resourceType: "sender", resourceId: "sender-b" },
+    );
+
+    expect(cache.getByResourceId("sender-a")?.deviceId).toBe("device-a");
+    expect(cache.getByResourceId("sender-b")?.deviceId).toBe("device-b");
+    expect(cache.getByResourceId("sender-a")?.health).toBe("healthy");
+    expect(cache.getByResourceId("sender-b")?.health).toBe("unhealthy");
+
+    cache.clearDevice("device-b");
+    expect(cache.getByResourceId("sender-a")?.resourceId).toBe("sender-a");
+    expect(cache.getByResourceId("sender-b")).toBeUndefined();
+
+    await sessionA.stop();
+    await sessionB.stop();
+  });
+
+  it("skips unchanged property notifications", async () => {
+    const { session } = openSession(() => ({ status: 200, value: 1 }));
+    const cache = new MonitorCache();
+    await cache.loadMonitor(
+      session,
+      "d1",
+      {
+        kind: "sender",
+        oid: 11,
+        role: "SenderMonitor_01",
+        classId: [1, 2, 2, 2],
+      },
+      { monitorOid: 11, resourceType: "sender", resourceId: "s1" },
+    );
+
+    const updates: unknown[] = [];
+    cache.on("updated", (state) => updates.push(state));
+
+    cache.applyNotification(
+      {
+        oid: 11,
+        eventId: { level: 1, index: 1 },
+        eventData: { propertyId: PROP_OVERALL_STATUS, value: 1 },
+      },
+      "d1",
+    );
+    expect(updates).toHaveLength(0);
+
+    cache.applyNotification(
+      {
+        oid: 11,
+        eventId: { level: 1, index: 1 },
+        eventData: { propertyId: PROP_OVERALL_STATUS, value: 3 },
+      },
+      "d1",
+    );
+    expect(updates).toHaveLength(1);
+    expect(cache.get("d1", 11)?.health).toBe("unhealthy");
 
     await session.stop();
   });

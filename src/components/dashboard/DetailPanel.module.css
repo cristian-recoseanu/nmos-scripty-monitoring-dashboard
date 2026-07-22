@@ -1,5 +1,6 @@
 .panel {
-  min-height: 100%;
+  /* Parent `.detailScroll` owns the pane scrollbar. */
+  min-height: min-content;
 }
 
 .header {
@@ -60,6 +61,65 @@
   text-underline-offset: 2px;
 }
 
+.tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.75rem 0 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.tab,
+.tabActive {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.55;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tabActive {
+  opacity: 1;
+  border-bottom-color: color-mix(in srgb, #0b6bcb 80%, transparent);
+}
+
+.sectionTitle {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.metaLine {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  opacity: 0.65;
+  font-family: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+}
+
+.codeBlock {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  overflow: auto;
+  max-height: 18rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  font-family: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.is05 {
+  min-width: 0;
+}
+
 @media (prefers-color-scheme: dark) {
   .error,
   .errorInline {
@@ -68,5 +128,9 @@
 
   .linkButton {
     color: #4da3ff;
+  }
+
+  .tabActive {
+    border-bottom-color: color-mix(in srgb, #4da3ff 80%, transparent);
   }
 }

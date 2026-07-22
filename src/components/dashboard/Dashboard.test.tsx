@@ -160,7 +160,7 @@ describe("ConnectionsView", () => {
     expect(screen.getByText("Disconnected")).toBeInTheDocument();
     expect(screen.getByText("Rx free")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Rx connected"));
+    fireEvent.click(screen.getByLabelText("Select Rx connected"));
     expect(onSelect).toHaveBeenCalledWith({
       kind: "receiver",
       id: "receiver-1",
@@ -361,6 +361,7 @@ describe("DetailPanel", () => {
 
     expect(screen.getByText("Domain statuses")).toBeInTheDocument();
     expect(screen.getAllByText("Healthy (1)").length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(screen.getByRole("tab", { name: "IS-04" }));
     fireEvent.click(screen.getByText(/Tx 1/));
     expect(onSelect).toHaveBeenCalledWith({
       kind: "sender",

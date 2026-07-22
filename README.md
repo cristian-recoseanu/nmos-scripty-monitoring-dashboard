@@ -4,10 +4,12 @@
 
 Next.js (App Router, SSR) monitoring application that harvests an IS-04 Query API registry and BCP-008 sender/receiver monitors via IS-12 / MS-05-02, then presents a traffic-light system view.
 
+![NMOS System Monitoring Dashboard](./screenshot.png)
+
 ## Requirements
 
-- Node.js 20+
-- npm 10+
+- Node.js 24+ (Active LTS)
+- npm 11+
 
 ## Quick start
 
@@ -46,7 +48,7 @@ Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, br
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     Browser (Dashboard)                      │
-│  System tree + selection detail  ←── SSE /api/events         │
+│  System/Connections + detail tabs  ←── SSE /api/events       │
 └───────────────────────────┬─────────────────────────────────┘
                             │ HTTP
 ┌───────────────────────────▼─────────────────────────────────┐
@@ -56,18 +58,20 @@ Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, br
 │  AppRuntime singleton                                        │
 │    ├─ ResourceStore (IS-04 inventory)                        │
 │    ├─ Is04Orchestrator ──WS grains──► Query API              │
+│    ├─ Is05Orchestrator ──HTTP GET──► Connection API (RTP)    │
 │    ├─ NcpOrchestrator  ──IS-12/NCP──► per-device sessions    │
 │    ├─ Health aggregator → SystemSnapshotDto                  │
 │    └─ RuntimeEventBus (debounced SSE fan-out)                │
 └─────────────────────────────────────────────────────────────┘
-         │                                      │
-         ▼                                      ▼
-   IS-04 Query API                    Device NCP (IS-12)
-   (registry)                         NcSender/ReceiverMonitor
+         │                    │                    │
+         ▼                    ▼                    ▼
+   IS-04 Query API     Device Connection     Device NCP (IS-12)
+   (registry)          API (IS-05, RO)       NcSender/ReceiverMonitor
 ```
 
-- **Single Node process**: IS-04 Query WebSockets and IS-12 NCP sessions live in an in-memory process singleton (`getAppRuntime()`). Run one app instance (or sticky sessions). Multi-instance shared state is out of scope for now.
+- **Single Node process**: IS-04 Query WebSockets, read-only IS-05 Connection API harvests, and IS-12 NCP sessions live in an in-memory process singleton (`getAppRuntime()`). Run one app instance (or sticky sessions). Multi-instance shared state is out of scope for now.
 - Prefer non-persistent Query API subscriptions (`persist: false`); they are cleaned up when WebSockets close.
+- IS-05 `/active` (+ sender `/transportfile`) is refreshed when the matching IS-04 sender/receiver `version` bumps (RTP only; no IS-05 writes).
 - Registry / NCP disconnects auto-retry with backoff; malformed grains and IS-12 messages are logged and skipped.
 - Per-device NCP failures are isolated so the rest of the tree stays live.
 - `/api/status` exposes registry connection state plus lightweight in-process metrics (resource counts, NCP sessions, reconnect counters).

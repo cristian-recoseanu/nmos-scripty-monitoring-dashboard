@@ -184,19 +184,21 @@ function DashboardInner({
             </p>
           ) : null}
 
-          {view === "system" ? (
-            <SystemTree
-              system={snapshot.system}
-              selection={selection}
-              onSelect={setSelection}
-            />
-          ) : (
-            <ConnectionsView
-              connections={connections}
-              selection={selection}
-              onSelect={setSelection}
-            />
-          )}
+          <div className={styles.viewScroll}>
+            {view === "system" ? (
+              <SystemTree
+                system={snapshot.system}
+                selection={selection}
+                onSelect={setSelection}
+              />
+            ) : (
+              <ConnectionsView
+                connections={connections}
+                selection={selection}
+                onSelect={setSelection}
+              />
+            )}
+          </div>
         </section>
 
         <section className={styles.bottom} aria-label="Detail view">
@@ -206,12 +208,14 @@ function DashboardInner({
               <span className={styles.panelMeta}>Refreshing…</span>
             ) : null}
           </div>
-          <DetailPanel
-            detail={detail}
-            loading={detailLoading}
-            error={detailError}
-            onSelect={setSelection}
-          />
+          <div className={styles.detailScroll}>
+            <DetailPanel
+              detail={detail}
+              loading={detailLoading}
+              error={detailError}
+              onSelect={setSelection}
+            />
+          </div>
         </section>
       </div>
     </div>

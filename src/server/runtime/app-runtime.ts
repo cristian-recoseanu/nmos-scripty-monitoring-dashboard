@@ -11,6 +11,7 @@ import {
 } from "@/server/logging";
 import { ResourceStore } from "@/server/is04";
 import { Is04Orchestrator } from "@/server/is04/is04-orchestrator";
+import { Is05Orchestrator } from "@/server/is05";
 import { NcpOrchestrator } from "@/server/monitoring";
 import {
   buildSelectionDetail,
@@ -63,6 +64,7 @@ export class AppRuntime {
   private store: ResourceStore;
   private is04?: Is04Orchestrator;
   private ncp?: NcpOrchestrator;
+  private is05?: Is05Orchestrator;
   private eventBus: RuntimeEventBus;
   private started = false;
   private starting?: Promise<void>;
@@ -87,6 +89,10 @@ export class AppRuntime {
 
   getNcp(): NcpOrchestrator | undefined {
     return this.ncp;
+  }
+
+  getIs05(): Is05Orchestrator | undefined {
+    return this.is05;
   }
 
   getMetrics(): RuntimeMetrics {
@@ -188,15 +194,23 @@ export class AppRuntime {
       logger: this.logger,
     });
 
+    this.is05 = new Is05Orchestrator({
+      store: this.store,
+      logger: this.logger,
+    });
+
     this.eventBus.setSnapshotBuilder(() => this.getSnapshot());
 
     this.store.on("change", () => this.eventBus.notifyChanged());
     this.ncp.on("monitorUpdated", () => this.eventBus.notifyChanged());
     this.ncp.on("deviceStatus", () => this.eventBus.notifyChanged());
     this.ncp.on("harvested", () => this.eventBus.notifyChanged());
+    this.is05.on("updated", () => this.eventBus.notifyChanged());
+    this.is05.on("removed", () => this.eventBus.notifyChanged());
     this.is04.on("connection", () => this.eventBus.notifyChanged());
 
     this.ncp.start();
+    this.is05.start();
 
     try {
       await this.is04.start();
@@ -215,6 +229,7 @@ export class AppRuntime {
   }
 
   async stop(): Promise<void> {
+    await this.is05?.stop();
     await this.ncp?.stop();
     await this.is04?.stop();
     this.started = false;
@@ -226,6 +241,7 @@ export class AppRuntime {
       store: this.store,
       getMonitor: (resourceId) => this.ncp?.cache.getByResourceId(resourceId),
       getDeviceNcpStatus: (deviceId) => this.ncp?.getDeviceStatus(deviceId),
+      getIs05: (resourceId) => this.is05?.get(resourceId),
       registryConnected: this.is04?.getConnectionState().connected ?? false,
       queryApiBaseUrl:
         this.is04?.queryApiBaseUrl ??
@@ -240,6 +256,7 @@ export class AppRuntime {
       store: this.store,
       getMonitor: (resourceId) => this.ncp?.cache.getByResourceId(resourceId),
       getDeviceNcpStatus: (deviceId) => this.ncp?.getDeviceStatus(deviceId),
+      getIs05: (resourceId) => this.is05?.get(resourceId),
       registryConnected: this.is04?.getConnectionState().connected ?? false,
       queryApiBaseUrl: this.is04?.queryApiBaseUrl,
       registryLastError:

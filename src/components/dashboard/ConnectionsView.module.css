@@ -110,12 +110,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.55rem;
-  height: 1.55rem;
+  width: 1.75rem;
+  height: 1.25rem;
   border: 1px solid color-mix(in srgb, var(--foreground) 28%, transparent);
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   padding: 0;
-  border-radius: 999px;
+  border-radius: 3px;
   cursor: pointer;
   line-height: 0;
   box-shadow: 0 1px 1px color-mix(in srgb, var(--foreground) 10%, transparent);
@@ -130,6 +130,7 @@
   background: color-mix(in srgb, var(--foreground) 12%, transparent);
   border-color: color-mix(in srgb, var(--foreground) 45%, transparent);
   transform: translateY(-1px);
+  z-index: 2;
 }
 
 .light:focus-visible {
@@ -142,20 +143,20 @@
   border-width: 2px;
   background: color-mix(in srgb, #0b6bcb 18%, transparent);
   box-shadow:
-    0 0 0 3px color-mix(in srgb, #0b6bcb 30%, transparent),
+    0 0 0 2px color-mix(in srgb, #0b6bcb 30%, transparent),
     0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
-  transform: scale(1.12);
+  transform: none;
   z-index: 1;
 }
 
 .lightSelected::after {
   content: "";
   position: absolute;
-  bottom: -0.35rem;
+  bottom: -0.3rem;
   left: 50%;
-  width: 0.35rem;
-  height: 0.35rem;
-  border-radius: 50%;
+  width: 0.55rem;
+  height: 0.2rem;
+  border-radius: 1px;
   background: #0b6bcb;
   transform: translateX(-50%);
 }
@@ -168,6 +169,11 @@
   margin-top: 0.2rem;
   padding-top: 0.35rem;
   border-top: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  min-height: 1.35rem;
+}
+
+.pinnedPreview .pinnedLabel {
+  font-weight: 600;
 }
 
 .pinnedIcons {
@@ -189,7 +195,7 @@
     border-color: #4da3ff;
     background: color-mix(in srgb, #4da3ff 18%, transparent);
     box-shadow:
-      0 0 0 3px color-mix(in srgb, #4da3ff 28%, transparent),
+      0 0 0 2px color-mix(in srgb, #4da3ff 28%, transparent),
       0 1px 2px color-mix(in srgb, #000 35%, transparent);
   }
 

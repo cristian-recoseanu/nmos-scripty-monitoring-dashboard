@@ -7,6 +7,7 @@ import type { MonitorDetailDto } from "@/server/domain/snapshot";
 import { HealthBadge } from "./HealthBadge";
 import { FieldList } from "./FieldList";
 import { TransitionCount } from "./TransitionCount";
+import { DismissibleNotice } from "./DismissibleNotice";
 import styles from "./MonitorPanel.module.css";
 
 type CounterType = "lost" | "late" | "transmission";
@@ -211,14 +212,35 @@ export function MonitorPanel({
         )}
       </div>
 
-      {message ? <p className={styles.message}>{message}</p> : null}
+      {message ? (
+        <DismissibleNotice
+          variant="inline"
+          tone="ok"
+          role="status"
+          onDismiss={() => setMessage(null)}
+        >
+          {message}
+        </DismissibleNotice>
+      ) : null}
       {error ? (
-        <p className={styles.error} role="alert">
+        <DismissibleNotice
+          variant="inline"
+          tone="error"
+          role="alert"
+          onDismiss={() => setError(null)}
+        >
           {error}
-        </p>
+        </DismissibleNotice>
       ) : null}
       {counters !== null ? (
-        <pre className={styles.counters}>{JSON.stringify(counters, null, 2)}</pre>
+        <DismissibleNotice
+          variant="inline"
+          tone="info"
+          role="status"
+          onDismiss={() => setCounters(null)}
+        >
+          <pre className={styles.counters}>{JSON.stringify(counters, null, 2)}</pre>
+        </DismissibleNotice>
       ) : null}
     </section>
   );

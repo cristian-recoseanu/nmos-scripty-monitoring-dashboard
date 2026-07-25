@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import type {
   ConnectionHubDto,
@@ -54,6 +54,12 @@ function ReceiverStrip({
     () => pickPinned(receivers, selection),
     [receivers, selection],
   );
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const hovered = useMemo(
+    () => receivers.find((receiver) => receiver.id === hoveredId),
+    [receivers, hoveredId],
+  );
+  const preview = hovered ?? pinned;
 
   return (
     <div className={styles.stripPanel}>
@@ -73,6 +79,7 @@ function ReceiverStrip({
           className={styles.strip}
           role="group"
           aria-label="Receivers — click a light to select"
+          onMouseLeave={() => setHoveredId(null)}
         >
           {receivers.map((receiver) => {
             const isSelected =
@@ -85,6 +92,13 @@ function ReceiverStrip({
                 title={`${isSelected ? "Selected: " : "Select: "}${receiver.label} (${receiver.health})`}
                 aria-label={`${isSelected ? "Selected" : "Select"} ${receiver.label}`}
                 aria-pressed={isSelected}
+                onMouseEnter={() => setHoveredId(receiver.id)}
+                onFocus={() => setHoveredId(receiver.id)}
+                onBlur={() =>
+                  setHoveredId((current) =>
+                    current === receiver.id ? null : current,
+                  )
+                }
                 onClick={() =>
                   onSelect({ kind: "receiver", id: receiver.id })
                 }
@@ -98,18 +112,20 @@ function ReceiverStrip({
             );
           })}
         </div>
-        {pinned ? (
-          <div className={styles.pinned}>
+        {preview ? (
+          <div
+            className={`${styles.pinned} ${hovered ? styles.pinnedPreview : ""}`}
+          >
             <span className={styles.pinnedIcons}>
-              {pinned.meta?.format ? (
-                <FormatIcon format={pinned.meta.format} />
+              {preview.meta?.format ? (
+                <FormatIcon format={preview.meta.format} />
               ) : null}
             </span>
-            <span className={styles.pinnedLabel} title={pinned.label}>
-              {pinned.label}
+            <span className={styles.pinnedLabel} title={preview.label}>
+              {preview.label}
             </span>
-            {hasMonitoringContext(pinned) ? (
-              <TransitionCount count={pinned.totalTransitions ?? 0} />
+            {!hovered && hasMonitoringContext(preview) ? (
+              <TransitionCount count={preview.totalTransitions ?? 0} />
             ) : null}
           </div>
         ) : null}

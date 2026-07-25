@@ -121,34 +121,15 @@
   cursor: not-allowed;
 }
 
-.message {
-  margin-top: 0.75rem;
-  font-size: 0.8rem;
-  color: #027a48;
-}
-
-.error {
-  margin-top: 0.75rem;
-  font-size: 0.8rem;
-  color: #b42318;
-}
-
 .counters {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
   font-size: 0.75rem;
   overflow: auto;
   max-height: 12rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  .message {
-    color: #47cd89;
-  }
-
-  .error {
-    color: #f97066;
-  }
+  color: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

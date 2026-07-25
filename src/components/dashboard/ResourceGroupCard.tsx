@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { TreeEntityDto } from "@/server/domain/snapshot";
 import { HealthBadge } from "./HealthBadge";
@@ -47,6 +47,12 @@ export function ResourceGroupCard({
     () => pickPinned(members, selection),
     [members, selection],
   );
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const hovered = useMemo(
+    () => members.find((member) => member.id === hoveredId),
+    [members, hoveredId],
+  );
+  const preview = hovered ?? pinned;
 
   return (
     <div
@@ -70,6 +76,7 @@ export function ResourceGroupCard({
         className={styles.strip}
         role="group"
         aria-label={`${group.label} — click a light to select`}
+        onMouseLeave={() => setHoveredId(null)}
       >
         {members.map((member) => {
           const isSelected =
@@ -84,6 +91,9 @@ export function ResourceGroupCard({
               title={`${isSelected ? "Selected: " : "Select: "}${member.label} (${member.health})`}
               aria-label={`${isSelected ? "Selected" : "Select"} ${member.label}`}
               aria-pressed={isSelected}
+              onMouseEnter={() => setHoveredId(member.id)}
+              onFocus={() => setHoveredId(member.id)}
+              onBlur={() => setHoveredId((current) => (current === member.id ? null : current))}
               onClick={() => {
                 if (member.kind === "sender" || member.kind === "receiver") {
                   onSelect({ kind: member.kind, id: member.id });
@@ -96,17 +106,22 @@ export function ResourceGroupCard({
         })}
       </div>
 
-      {pinned ? (
-        <div className={styles.pinned}>
+      {preview ? (
+        <div
+          className={`${styles.pinned} ${hovered ? styles.pinnedPreview : ""}`}
+          data-preview={hovered ? "true" : "false"}
+        >
           <span className={styles.pinnedIcons}>
-            {pinned.meta?.format ? (
-              <FormatIcon format={pinned.meta.format} />
+            {preview.meta?.format ? (
+              <FormatIcon format={preview.meta.format} />
             ) : null}
           </span>
-          <span className={styles.pinnedLabel} title={pinned.label}>
-            {pinned.label}
+          <span className={styles.pinnedLabel} title={preview.label}>
+            {preview.label}
           </span>
-          <TransitionCount count={pinned.totalTransitions ?? 0} />
+          {!hovered ? (
+            <TransitionCount count={preview.totalTransitions ?? 0} />
+          ) : null}
         </div>
       ) : null}
     </div>

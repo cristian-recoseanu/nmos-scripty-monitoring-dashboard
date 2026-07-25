@@ -79,22 +79,6 @@
   cursor: not-allowed;
 }
 
-.banner {
-  padding: 0.55rem 1.25rem;
-  font-size: 0.8rem;
-  background: color-mix(in srgb, #b54708 12%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, #b54708 25%, transparent);
-  flex-shrink: 0;
-}
-
-.bannerOk {
-  padding: 0.55rem 1.25rem;
-  font-size: 0.8rem;
-  background: color-mix(in srgb, #027a48 12%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, #027a48 25%, transparent);
-  flex-shrink: 0;
-}
-
 .split {
   display: grid;
   grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);

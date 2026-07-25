@@ -9,6 +9,7 @@ import { ConnectionsView } from "./ConnectionsView";
 import { DetailPanel } from "./DetailPanel";
 import { HealthBadge } from "./HealthBadge";
 import { TransitionCount } from "./TransitionCount";
+import { DismissibleNotice } from "./DismissibleNotice";
 import { useDashboardState } from "./useDashboardState";
 import styles from "./Dashboard.module.css";
 
@@ -37,6 +38,9 @@ function DashboardInner({
   const [resetBusy, setResetBusy] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [dismissedRegistryError, setDismissedRegistryError] = useState<
+    string | null
+  >(null);
 
   const registryConnected =
     status?.registry.connected ?? initialStatus.registry.connected;
@@ -45,6 +49,8 @@ function DashboardInner({
     status?.configError ??
     status?.registry.lastError ??
     snapshot.registry.lastError;
+  const showRegistryBanner =
+    Boolean(registryError) && registryError !== dismissedRegistryError;
   const connections = snapshot.connections ?? {
     hubs: [],
     disconnected: [],
@@ -129,20 +135,32 @@ function DashboardInner({
         </div>
       </header>
 
-      {registryError ? (
-        <div className={styles.banner} role="status">
+      {showRegistryBanner ? (
+        <DismissibleNotice
+          tone="info"
+          role="status"
+          onDismiss={() => setDismissedRegistryError(registryError ?? null)}
+        >
           {registryError}
-        </div>
+        </DismissibleNotice>
       ) : null}
       {resetMessage ? (
-        <div className={styles.bannerOk} role="status">
+        <DismissibleNotice
+          tone="ok"
+          role="status"
+          onDismiss={() => setResetMessage(null)}
+        >
           {resetMessage}
-        </div>
+        </DismissibleNotice>
       ) : null}
       {resetError ? (
-        <div className={styles.banner} role="alert">
+        <DismissibleNotice
+          tone="error"
+          role="alert"
+          onDismiss={() => setResetError(null)}
+        >
           {resetError}
-        </div>
+        </DismissibleNotice>
       ) : null}
 
       <div className={styles.split}>

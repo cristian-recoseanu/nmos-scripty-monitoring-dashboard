@@ -87,6 +87,7 @@ Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, br
 | `GET`  | `/api/snapshot`                               | Full system tree with bubbled health                                    |
 | `GET`  | `/api/detail?kind=&id=`                       | Selection detail (`system` | `node` | `device` | `sender` | `receiver`) |
 | `GET`  | `/api/events`                                 | SSE stream of snapshot updates                                          |
+| `POST` | `/api/ack`                                    | Body `{ kind, id, acknowledged }` for node/device/sender/receiver       |
 | `POST` | `/api/system/reset-monitors`                  | `ResetCountersAndMessages` on all connected NCP monitors                |
 | `POST` | `/api/monitors/:deviceId/:oid/reset`          | `ResetCountersAndMessages`                                              |
 | `POST` | `/api/monitors/:deviceId/:oid/auto-reset`     | Body `{ "value": boolean }`                                             |
@@ -102,6 +103,7 @@ Open `/` for the split dashboard:
 - **Top:** Tabbed **System view** (org chart) and **Connections view** (sender hubs with orbiting receivers + Disconnected group).
 - **Bottom:** Selection detail, worst contributors, and monitor actions (reset / auto-reset / counters).
 - Header: system health, total transitions (green/amber), **Reset all**, registry / live connection pills.
+- Detail header: **Ack / Unack** dropdown for node, device, sender, and receiver (acked resources show a purple light; parents ignore their health and transition sums).
 - Live updates over SSE (`/api/events`). Swap views anytime via tabs (`?view=connections`).
 
 
@@ -120,6 +122,7 @@ Open `/` for the split dashboard:
 | `NMOS_REGISTRY_SECURE_WS` | Query subscription `secure` flag                  |
 | `NMOS_CONFIG_PATH`        | Path to YAML config file (default `config.yaml`)  |
 | `LOG_LEVEL`               | `fatal` … `trace` / `silent`                      |
+| `LOG_FILE`                | Persistent log path (default `logs/app.log`)      |
 | `PORT`                    | App listen port (default 3000)                    |
 
 

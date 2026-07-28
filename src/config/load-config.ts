@@ -116,6 +116,11 @@ function configFromEnv(env: NodeJS.ProcessEnv): RawConfig {
     result.logLevel = logLevel;
   }
 
+  const logFile = envValue(env, "LOG_FILE");
+  if (logFile !== undefined) {
+    result.logFile = logFile;
+  }
+
   const appPort = envValue(env, "PORT") ?? envValue(env, "APP_PORT");
   if (appPort !== undefined) {
     result.appPort = appPort;
@@ -199,6 +204,7 @@ export function summariseConfig(config: AppConfig): Record<string, unknown> {
       queryApiBaseUrl: buildQueryApiBaseUrl(config),
     },
     logLevel: config.logLevel,
+    logFile: config.logFile,
     appPort: config.appPort,
   };
 }

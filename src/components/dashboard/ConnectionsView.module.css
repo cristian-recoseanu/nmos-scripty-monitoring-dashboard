@@ -149,18 +149,6 @@
   z-index: 1;
 }
 
-.lightSelected::after {
-  content: "";
-  position: absolute;
-  bottom: -0.3rem;
-  left: 50%;
-  width: 0.55rem;
-  height: 0.2rem;
-  border-radius: 1px;
-  background: #0b6bcb;
-  transform: translateX(-50%);
-}
-
 .pinned {
   display: flex;
   align-items: center;
@@ -197,10 +185,6 @@
     box-shadow:
       0 0 0 2px color-mix(in srgb, #4da3ff 28%, transparent),
       0 1px 2px color-mix(in srgb, #000 35%, transparent);
-  }
-
-  .lightSelected::after {
-    background: #4da3ff;
   }
 
   .light:focus-visible {

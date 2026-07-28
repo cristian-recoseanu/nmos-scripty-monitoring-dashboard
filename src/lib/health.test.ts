@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateParentHealth,
   compareSeverity,
+  contributesTransitions,
   formatNcStatus,
   mapOverallStatus,
   worstSeverity,
@@ -47,13 +48,26 @@ describe("worstSeverity", () => {
 });
 
 describe("aggregateParentHealth", () => {
-  it("ignores unknown and inactive when bubbling", () => {
+  it("ignores unknown, inactive, and acknowledged when bubbling", () => {
     expect(aggregateParentHealth(["unknown", "healthy"])).toBe("healthy");
     expect(aggregateParentHealth(["inactive", "degraded", "unknown"])).toBe(
       "degraded",
     );
     expect(aggregateParentHealth(["inactive", "unknown"])).toBe("unknown");
+    expect(aggregateParentHealth(["acknowledged", "healthy"])).toBe("healthy");
+    expect(aggregateParentHealth(["acknowledged", "unhealthy", "unknown"])).toBe(
+      "unhealthy",
+    );
+    expect(aggregateParentHealth(["acknowledged", "inactive"])).toBe("unknown");
     expect(aggregateParentHealth([])).toBe("unknown");
+  });
+});
+
+describe("contributesTransitions", () => {
+  it("excludes acknowledged children only", () => {
+    expect(contributesTransitions("acknowledged")).toBe(false);
+    expect(contributesTransitions("unknown")).toBe(true);
+    expect(contributesTransitions("healthy")).toBe(true);
   });
 });
 

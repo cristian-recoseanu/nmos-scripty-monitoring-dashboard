@@ -1,4 +1,4 @@
-import pino, { type Logger, type LoggerOptions } from "pino";
+import pino, { type Logger, type LoggerOptions, type TransportTargetOptions } from "pino";
 
 import type { LogLevel } from "@/config/schema";
 
@@ -19,6 +19,8 @@ export type CreateLoggerOptions = {
   level?: LogLevel;
   /** Force pretty printing (defaults to non-production). */
   pretty?: boolean;
+  /** Optional path for a persistent log file (in addition to stdout). */
+  logFile?: string;
   bindings?: LoggerBindings;
 };
 
@@ -61,6 +63,7 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
   const pretty =
     options.pretty ??
     (process.env.NODE_ENV !== "production" && process.env.CI !== "true");
+  const logFile = options.logFile?.trim() || undefined;
 
   const loggerOptions: LoggerOptions = {
     level,
@@ -82,18 +85,39 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
     },
   };
 
+  if (!pretty && !logFile) {
+    return pino(loggerOptions);
+  }
+
+  const targets: TransportTargetOptions[] = [];
+
   if (pretty) {
-    loggerOptions.transport = {
+    targets.push({
       target: "pino-pretty",
+      level,
       options: {
         colorize: true,
         translateTime: "SYS:standard",
         ignore: "pid,hostname",
       },
-    };
+    });
+  } else {
+    targets.push({
+      target: "pino/file",
+      level,
+      options: { destination: 1 },
+    });
   }
 
-  return pino(loggerOptions);
+  if (logFile) {
+    targets.push({
+      target: "pino/file",
+      level,
+      options: { destination: logFile, mkdir: true },
+    });
+  }
+
+  return pino(loggerOptions, pino.transport({ targets }));
 }
 
 export function childLogger(

@@ -11,6 +11,7 @@ export const HEALTH_SEVERITIES = [
   "unknown",
   "healthy",
   "inactive",
+  "acknowledged",
 ] as const;
 
 export type HealthSeverity = (typeof HEALTH_SEVERITIES)[number];
@@ -21,11 +22,22 @@ const SEVERITY_RANK: Record<HealthSeverity, number> = {
   unknown: 2,
   healthy: 3,
   inactive: 4,
+  /** Display-only / parent-neutral; ranked with unknown for contributor lists. */
+  acknowledged: 2,
 };
 
 /** Severities that do not contribute to parent health when bubbling. */
 export function isNeutralSeverity(severity: HealthSeverity): boolean {
-  return severity === "unknown" || severity === "inactive";
+  return (
+    severity === "unknown" ||
+    severity === "inactive" ||
+    severity === "acknowledged"
+  );
+}
+
+/** Transition sums from acknowledged children are excluded from parents. */
+export function contributesTransitions(severity: HealthSeverity): boolean {
+  return severity !== "acknowledged";
 }
 
 /** Map BCP-008 / NcOverallStatus-style values onto app severities. */
@@ -77,7 +89,7 @@ export function worstSeverity(
 }
 
 /**
- * Parent health from children: ignore `unknown` / `inactive`.
+ * Parent health from children: ignore `unknown` / `inactive` / `acknowledged`.
  * If every child is neutral (or the list is empty), result is `unknown`.
  */
 export function aggregateParentHealth(

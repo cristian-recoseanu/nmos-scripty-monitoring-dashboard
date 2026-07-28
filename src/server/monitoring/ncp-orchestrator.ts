@@ -184,11 +184,23 @@ export class NcpOrchestrator extends EventEmitter {
         );
         reset += 1;
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Reset failed";
         failures.push({
           deviceId: state.deviceId,
           oid: state.oid,
-          error: error instanceof Error ? error.message : "Reset failed",
+          error: message,
         });
+        this.logger.warn(
+          {
+            err: error,
+            deviceId: state.deviceId,
+            oid: state.oid,
+            kind: state.kind,
+            resourceId: state.resourceId,
+          },
+          "Failed to reset monitor during system-wide reset",
+        );
       }
     }
 

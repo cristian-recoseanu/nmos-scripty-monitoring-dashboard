@@ -37,6 +37,7 @@ yarn-error.log*
 # local workspace / secrets
 Tasks.md
 config.yaml
+logs/
 
 # vercel
 .vercel

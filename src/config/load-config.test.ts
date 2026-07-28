@@ -23,6 +23,7 @@ describe("appConfigSchema", () => {
     expect(config.registry.queryApiVersion).toBe("v1.3");
     expect(config.registry.basePath).toBe("/x-nmos/query");
     expect(config.logLevel).toBe("info");
+    expect(config.logFile).toBe("logs/app.log");
     expect(config.appPort).toBe(3000);
   });
 

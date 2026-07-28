@@ -29,7 +29,7 @@ import {
   type NodeHealth,
   type SystemHealth,
 } from "./health-aggregator";
-import { aggregateParentHealth } from "@/lib/health";
+import { aggregateParentHealth, contributesTransitions } from "@/lib/health";
 
 export type { EntityKind, HealthContributor };
 
@@ -123,6 +123,7 @@ export type SelectionDetailDto =
       label: string;
       health: HealthSeverity;
       totalTransitions: number;
+      acknowledged: boolean;
       resource: NmosNode;
       worstContributors: HealthContributor[];
     }
@@ -132,6 +133,7 @@ export type SelectionDetailDto =
       label: string;
       health: HealthSeverity;
       totalTransitions: number;
+      acknowledged: boolean;
       resource: NmosDevice;
       ncp: {
         availability: DeviceNcpStatus["availability"] | "unknown";
@@ -147,6 +149,7 @@ export type SelectionDetailDto =
       id: string;
       label: string;
       health: HealthSeverity;
+      acknowledged: boolean;
       resource: NmosSender;
       flow?: NmosFlow;
       source?: NmosSource;
@@ -159,6 +162,7 @@ export type SelectionDetailDto =
       id: string;
       label: string;
       health: HealthSeverity;
+      acknowledged: boolean;
       resource: NmosReceiver;
       connectedSender?: {
         id: string;
@@ -238,7 +242,10 @@ function deviceToTree(device: DeviceHealth): TreeEntityDto {
       health: aggregateParentHealth(device.senders.map((leaf) => leaf.health)),
       childCount: senderLeaves.length,
       totalTransitions: device.senders.reduce(
-        (sum, leaf) => sum + leaf.totalTransitions,
+        (sum, leaf) =>
+          contributesTransitions(leaf.health)
+            ? sum + leaf.totalTransitions
+            : sum,
         0,
       ),
       children: senderLeaves,
@@ -255,7 +262,10 @@ function deviceToTree(device: DeviceHealth): TreeEntityDto {
       health: aggregateParentHealth(device.receivers.map((leaf) => leaf.health)),
       childCount: receiverLeaves.length,
       totalTransitions: device.receivers.reduce(
-        (sum, leaf) => sum + leaf.totalTransitions,
+        (sum, leaf) =>
+          contributesTransitions(leaf.health)
+            ? sum + leaf.totalTransitions
+            : sum,
         0,
       ),
       children: receiverLeaves,
@@ -405,6 +415,7 @@ export function buildSelectionDetail(
           label: node.label,
           health: node.health,
           totalTransitions: node.totalTransitions,
+          acknowledged: options.isAcknowledged?.("node", id) ?? false,
           resource: {
             id,
             version: "0:0",
@@ -423,6 +434,7 @@ export function buildSelectionDetail(
       label: node.label,
       health: node.health,
       totalTransitions: node.totalTransitions,
+      acknowledged: options.isAcknowledged?.("node", id) ?? false,
       resource,
       worstContributors: node.worstContributors,
     };
@@ -442,6 +454,7 @@ export function buildSelectionDetail(
       label: deviceHealth?.label ?? resource.label ?? id,
       health: deviceHealth?.health ?? "unknown",
       totalTransitions: deviceHealth?.totalTransitions ?? 0,
+      acknowledged: options.isAcknowledged?.("device", id) ?? false,
       resource,
       ncp: {
         availability: ncp?.availability ?? endpoint.availability,
@@ -461,11 +474,13 @@ export function buildSelectionDetail(
     }
     const monitor = options.getMonitor(id);
     const is05Entry = options.getIs05?.(id);
+    const leaf = findLeafHealth(system, "sender", id);
     return {
       kind: "sender",
       id,
       label: resolved.sender.label || id,
-      health: monitor?.health ?? "unknown",
+      health: leaf?.health ?? monitor?.health ?? "unknown",
+      acknowledged: options.isAcknowledged?.("sender", id) ?? false,
       resource: resolved.sender,
       flow: resolved.flow,
       source: resolved.source,
@@ -482,23 +497,29 @@ export function buildSelectionDetail(
     }
     const monitor = options.getMonitor(id);
     const connected = options.store.getConnectedSender(id);
+    const connectedLeaf = connected
+      ? findLeafHealth(system, "sender", connected.id)
+      : undefined;
     const connectedMonitor = connected
       ? options.getMonitor(connected.id)
       : undefined;
     const is05Entry = options.getIs05?.(id);
+    const leaf = findLeafHealth(system, "receiver", id);
 
     return {
       kind: "receiver",
       id,
       label: resource.label || id,
-      health: monitor?.health ?? "unknown",
+      health: leaf?.health ?? monitor?.health ?? "unknown",
+      acknowledged: options.isAcknowledged?.("receiver", id) ?? false,
       resource,
       connectedSender: connected
         ? {
             id: connected.id,
             label: connected.label || connected.id,
             deviceId: connected.device_id,
-            health: connectedMonitor?.health ?? "unknown",
+            health:
+              connectedLeaf?.health ?? connectedMonitor?.health ?? "unknown",
           }
         : undefined,
       monitor: monitor ? monitorToDto(monitor) : undefined,
@@ -518,6 +539,23 @@ function findDeviceHealth(
     const device = node.devices.find((entry) => entry.id === deviceId);
     if (device) {
       return device;
+    }
+  }
+  return undefined;
+}
+
+function findLeafHealth(
+  system: SystemHealth,
+  kind: "sender" | "receiver",
+  id: Uuid,
+): LeafHealth | undefined {
+  for (const node of system.nodes) {
+    for (const device of node.devices) {
+      const leaves = kind === "sender" ? device.senders : device.receivers;
+      const leaf = leaves.find((entry) => entry.id === id);
+      if (leaf) {
+        return leaf;
+      }
     }
   }
   return undefined;

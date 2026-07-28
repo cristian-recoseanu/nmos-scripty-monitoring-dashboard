@@ -9,6 +9,8 @@ import { ContributorsList } from "./ContributorsList";
 import { MonitorPanel } from "./MonitorPanel";
 import { TransitionCount } from "./TransitionCount";
 import { Is05Panel } from "./Is05Panel";
+import { AcknowledgeControl } from "./AcknowledgeControl";
+import { ControlsTable } from "./ControlsTable";
 import type { Selection } from "./useDashboardState";
 import styles from "./DetailPanel.module.css";
 
@@ -243,6 +245,13 @@ export function DetailPanel({
             />
           ) : null}
           <HealthBadge health={detail.health} />
+          {detail.kind !== "system" ? (
+            <AcknowledgeControl
+              kind={detail.kind}
+              id={detail.id}
+              acknowledged={detail.acknowledged}
+            />
+          ) : null}
         </div>
       </header>
 
@@ -305,15 +314,9 @@ export function DetailPanel({
                 label: "NCP error",
                 value: detail.ncp.lastError ?? "—",
               },
-              {
-                label: "Controls",
-                value:
-                  detail.resource.controls
-                    ?.map((control) => `${control.type} → ${control.href}`)
-                    .join("\n") || "—",
-              },
             ]}
           />
+          <ControlsTable controls={detail.resource.controls} />
           <ContributorsList
             title="Worst senders & receivers contributing to device state"
             contributors={detail.worstContributors}

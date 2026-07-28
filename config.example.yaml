@@ -6,4 +6,6 @@ registry:
   basePath: /x-nmos/query
 
 logLevel: info
+# Also written to this file (in addition to stdout)
+logFile: logs/app.log
 appPort: 3000

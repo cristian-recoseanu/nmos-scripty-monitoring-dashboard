@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import type { TreeEntityDto } from "@/server/domain/snapshot";
+import { compareSeverity } from "@/lib/health";
 import { HealthBadge } from "./HealthBadge";
 import { FormatIcon } from "./FormatIcon";
 import { TransitionCount } from "./TransitionCount";
@@ -22,10 +23,9 @@ function pickPinned(
   if (selected) {
     return selected;
   }
-  const worst = [...members].sort((a, b) => {
-    const rank = { unhealthy: 0, degraded: 1, unknown: 2, healthy: 3, inactive: 4 };
-    return rank[a.health] - rank[b.health];
-  })[0];
+  const worst = [...members].sort((a, b) =>
+    compareSeverity(a.health, b.health),
+  )[0];
   return worst ?? members[0];
 }
 

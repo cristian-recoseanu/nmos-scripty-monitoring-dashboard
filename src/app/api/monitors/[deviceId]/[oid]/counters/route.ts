@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getRootLogger } from "@/server/logging";
 import { getAppRuntime } from "@/server/runtime/app-runtime";
 
 export const dynamic = "force-dynamic";
@@ -13,13 +14,20 @@ const COUNTER_TYPES = new Set(["lost", "late", "transmission"]);
 
 export async function GET(request: Request, context: RouteContext) {
   const { deviceId, oid: oidRaw } = await context.params;
+  const log = getRootLogger().child({
+    component: "api-monitor-counters",
+    deviceId,
+    oid: oidRaw,
+  });
   const oid = Number(oidRaw);
   if (!Number.isInteger(oid)) {
+    log.warn("Invalid oid for counter fetch");
     return NextResponse.json({ error: "Invalid oid" }, { status: 400 });
   }
 
   const type = new URL(request.url).searchParams.get("type");
   if (!type || !COUNTER_TYPES.has(type)) {
+    log.warn({ type }, "Invalid counter type");
     return NextResponse.json(
       { error: "Query param type must be lost, late, or transmission" },
       { status: 400 },
@@ -30,6 +38,7 @@ export async function GET(request: Request, context: RouteContext) {
   await app.ensureStarted();
   const ncp = app.getNcp();
   if (!ncp) {
+    log.error("Monitoring runtime is not available");
     return NextResponse.json(
       { error: "Monitoring runtime is not available" },
       { status: 503 },
@@ -46,8 +55,10 @@ export async function GET(request: Request, context: RouteContext) {
 
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Counter fetch failed";
+    const message =
+      error instanceof Error ? error.message : "Counter fetch failed";
     const status = message.includes("throttled") ? 429 : 502;
+    log.error({ err: error, oid, type, status }, "Counter fetch failed");
     return NextResponse.json({ error: message }, { status });
   }
 }

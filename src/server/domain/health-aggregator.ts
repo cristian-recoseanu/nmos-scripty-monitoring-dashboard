@@ -1,6 +1,7 @@
 import {
   aggregateParentHealth,
   compareSeverity,
+  contributesTransitions,
   type HealthSeverity,
 } from "@/lib/health";
 import {
@@ -169,7 +170,30 @@ export type HealthAggregatorInput = {
   store: ResourceStore;
   getMonitor: (resourceId: Uuid) => MonitorState | undefined;
   getDeviceNcpStatus: (deviceId: Uuid) => DeviceNcpStatus | undefined;
+  isAcknowledged?: (
+    kind: Exclude<EntityKind, "system">,
+    id: Uuid,
+  ) => boolean;
 };
+
+function applyAcknowledgement(
+  kind: Exclude<EntityKind, "system">,
+  id: Uuid,
+  health: HealthSeverity,
+  input: HealthAggregatorInput,
+): HealthSeverity {
+  return input.isAcknowledged?.(kind, id) ? "acknowledged" : health;
+}
+
+function sumChildTransitions(
+  children: ReadonlyArray<{ health: HealthSeverity; totalTransitions: number }>,
+): number {
+  return children.reduce(
+    (sum, child) =>
+      contributesTransitions(child.health) ? sum + child.totalTransitions : sum,
+    0,
+  );
+}
 
 /**
  * Build bubbled health for System → Node → Device → Sender/Receiver.
@@ -209,10 +233,7 @@ export function aggregateSystemHealth(
     })),
   );
 
-  const totalTransitions = nodes.reduce(
-    (sum, node) => sum + node.totalTransitions,
-    0,
-  );
+  const totalTransitions = sumChildTransitions(nodes);
 
   return {
     health: nodes.length === 0 ? "unknown" : health,
@@ -240,15 +261,17 @@ export function aggregateNodeHealth(
     })),
   );
 
-  const totalTransitions = devices.reduce(
-    (sum, device) => sum + device.totalTransitions,
-    0,
-  );
+  const totalTransitions = sumChildTransitions(devices);
 
   return {
     id: node.id,
     label: labelOf(node),
-    health: devices.length === 0 ? "unknown" : health,
+    health: applyAcknowledgement(
+      "node",
+      node.id,
+      devices.length === 0 ? "unknown" : health,
+      input,
+    ),
     totalTransitions,
     devices: devices.sort((a, b) => a.label.localeCompare(b.label)),
     worstContributors,
@@ -262,26 +285,34 @@ export function aggregateDeviceHealth(
   const ncp = input.getDeviceNcpStatus(device.id);
   const senders = input.store
     .getSendersForDevice(device.id)
-    .map((sender) =>
-      leafFromResource(
+    .map((sender) => {
+      const leaf = leafFromResource(
         "sender",
         sender,
         input.getMonitor(sender.id),
         input.store,
-      ),
-    )
+      );
+      return {
+        ...leaf,
+        health: applyAcknowledgement("sender", leaf.id, leaf.health, input),
+      };
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const receivers = input.store
     .getReceiversForDevice(device.id)
-    .map((receiver) =>
-      leafFromResource(
+    .map((receiver) => {
+      const leaf = leafFromResource(
         "receiver",
         receiver,
         input.getMonitor(receiver.id),
         input.store,
-      ),
-    )
+      );
+      return {
+        ...leaf,
+        health: applyAcknowledgement("receiver", leaf.id, leaf.health, input),
+      };
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const leaves = [...senders, ...receivers];
@@ -295,15 +326,17 @@ export function aggregateDeviceHealth(
     })),
   );
 
-  const totalTransitions = leaves.reduce(
-    (sum, leaf) => sum + leaf.totalTransitions,
-    0,
-  );
+  const totalTransitions = sumChildTransitions(leaves);
 
   return {
     id: device.id,
     label: labelOf(device),
-    health: leaves.length === 0 ? "unknown" : health,
+    health: applyAcknowledgement(
+      "device",
+      device.id,
+      leaves.length === 0 ? "unknown" : health,
+      input,
+    ),
     ncpAvailability: ncp?.availability ?? "unknown",
     ncpConnected: ncp?.connected ?? false,
     totalTransitions,

@@ -47,6 +47,10 @@
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
+.badge[data-health="acknowledged"] {
+  color: #6941c6;
+}
+
 @media (prefers-color-scheme: dark) {
   .badge[data-health="unhealthy"] {
     color: #f97066;
@@ -58,5 +62,9 @@
 
   .badge[data-health="healthy"] {
     color: #47cd89;
+  }
+
+  .badge[data-health="acknowledged"] {
+    color: #bdb4fe;
   }
 }

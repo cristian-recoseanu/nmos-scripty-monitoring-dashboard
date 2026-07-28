@@ -287,6 +287,7 @@ describe("DetailPanel", () => {
       id: "sender-1",
       label: "Tx 1",
       health: "unknown",
+      acknowledged: false,
       deviceId: "device-1",
       resource: {
         id: "sender-1",
@@ -320,6 +321,7 @@ describe("DetailPanel", () => {
       id: "receiver-1",
       label: "Rx 1",
       health: "healthy",
+      acknowledged: false,
       deviceId: "device-1",
       resource: {
         id: "receiver-1",

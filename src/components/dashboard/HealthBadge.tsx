@@ -7,6 +7,7 @@ const LABELS: Record<HealthSeverity, string> = {
   unknown: "Unknown",
   healthy: "Healthy",
   inactive: "Inactive",
+  acknowledged: "Acknowledged",
 };
 
 export function HealthBadge({

@@ -44,6 +44,8 @@ export const appConfigSchema = z.object({
     secureWs: booleanFromEnv.optional(),
   }),
   logLevel: logLevelSchema.default("info"),
+  /** Persistent log file path (also writes to stdout). Default: logs/app.log */
+  logFile: z.string().min(1).default("logs/app.log"),
   appPort: z.coerce.number().int().min(1).max(65535).default(3000),
 });
 

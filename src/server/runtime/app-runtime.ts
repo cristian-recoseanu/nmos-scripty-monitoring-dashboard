@@ -14,6 +14,10 @@ import { Is04Orchestrator } from "@/server/is04/is04-orchestrator";
 import { Is05Orchestrator } from "@/server/is05";
 import { NcpOrchestrator } from "@/server/monitoring";
 import {
+  AcknowledgementStore,
+  type AckableKind,
+} from "@/server/domain/acknowledgement-store";
+import {
   buildSelectionDetail,
   buildSystemSnapshot,
   type EntityKind,
@@ -66,6 +70,7 @@ export class AppRuntime {
   private ncp?: NcpOrchestrator;
   private is05?: Is05Orchestrator;
   private eventBus: RuntimeEventBus;
+  private acknowledgements: AcknowledgementStore;
   private started = false;
   private starting?: Promise<void>;
   private configError?: string;
@@ -73,6 +78,7 @@ export class AppRuntime {
   constructor() {
     this.logger = getRootLogger();
     this.store = new ResourceStore();
+    this.acknowledgements = new AcknowledgementStore();
     this.eventBus = new RuntimeEventBus(
       () => this.getSnapshot(),
       SNAPSHOT_DEBOUNCE_MS,
@@ -93,6 +99,23 @@ export class AppRuntime {
 
   getIs05(): Is05Orchestrator | undefined {
     return this.is05;
+  }
+
+  setAcknowledgement(
+    kind: AckableKind,
+    id: string,
+    acknowledged: boolean,
+  ): void {
+    this.acknowledgements.setAcknowledged(kind, id, acknowledged);
+    this.logger.info(
+      { kind, id, acknowledged },
+      acknowledged ? "Resource acknowledged" : "Resource unacknowledged",
+    );
+    this.eventBus.notifyChanged();
+  }
+
+  isAcknowledged(kind: AckableKind, id: string): boolean {
+    return this.acknowledgements.isAcknowledged(kind, id);
   }
 
   getMetrics(): RuntimeMetrics {
@@ -168,6 +191,7 @@ export class AppRuntime {
     this.logger = configureRootLogger({
       level: this.config.logLevel,
       pretty: process.env.NODE_ENV !== "production",
+      logFile: this.config.logFile,
     });
 
     const versions = {
@@ -242,6 +266,8 @@ export class AppRuntime {
       getMonitor: (resourceId) => this.ncp?.cache.getByResourceId(resourceId),
       getDeviceNcpStatus: (deviceId) => this.ncp?.getDeviceStatus(deviceId),
       getIs05: (resourceId) => this.is05?.get(resourceId),
+      isAcknowledged: (kind, id) =>
+        this.acknowledgements.isAcknowledged(kind, id),
       registryConnected: this.is04?.getConnectionState().connected ?? false,
       queryApiBaseUrl:
         this.is04?.queryApiBaseUrl ??
@@ -257,6 +283,8 @@ export class AppRuntime {
       getMonitor: (resourceId) => this.ncp?.cache.getByResourceId(resourceId),
       getDeviceNcpStatus: (deviceId) => this.ncp?.getDeviceStatus(deviceId),
       getIs05: (resourceId) => this.is05?.get(resourceId),
+      isAcknowledged: (kindAck, idAck) =>
+        this.acknowledgements.isAcknowledged(kindAck, idAck),
       registryConnected: this.is04?.getConnectionState().connected ?? false,
       queryApiBaseUrl: this.is04?.queryApiBaseUrl,
       registryLastError:

@@ -7,6 +7,7 @@ import type {
   ConnectionsSnapshotDto,
   LeafTreeEntityDto,
 } from "@/server/domain/snapshot";
+import { compareSeverity } from "@/lib/health";
 import { EntityCard, hasMonitoringContext } from "./EntityCard";
 import { HealthBadge } from "./HealthBadge";
 import { FormatIcon } from "./FormatIcon";
@@ -27,16 +28,9 @@ function pickPinned(
   if (selected) {
     return selected;
   }
-  const worst = [...members].sort((a, b) => {
-    const rank = {
-      unhealthy: 0,
-      degraded: 1,
-      unknown: 2,
-      healthy: 3,
-      inactive: 4,
-    };
-    return rank[a.health] - rank[b.health];
-  })[0];
+  const worst = [...members].sort((a, b) =>
+    compareSeverity(a.health, b.health),
+  )[0];
   return worst ?? members[0];
 }
 

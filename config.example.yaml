@@ -9,3 +9,11 @@ logLevel: info
 # Also written to this file (in addition to stdout)
 logFile: logs/app.log
 appPort: 3000
+
+# Optional MCP Streamable HTTP server for LLM root-cause investigation.
+# Hard off when enabled is false (default) — no extra listener.
+mcp:
+  enabled: false
+  host: 127.0.0.1
+  port: 3100
+  path: /mcp

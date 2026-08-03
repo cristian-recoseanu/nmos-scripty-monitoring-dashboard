@@ -8,6 +8,8 @@ import {
 } from "@/server/is12";
 import type {
   NmosDevice,
+  NmosReceiver,
+  NmosSender,
   ResourceStore,
   ResourceStoreEvent,
   Uuid,
@@ -47,17 +49,36 @@ type DeviceSession = {
   status: DeviceNcpStatus;
 };
 
+type HarvestScheduleState = {
+  attempts: number;
+  timer?: ReturnType<typeof setTimeout>;
+  inFlight: boolean;
+  pending: boolean;
+};
+
 export type NcpOrchestratorOptions = {
   store: ResourceStore;
   logger: Logger;
   webSocketFactory?: WebSocketFactory;
   reconnectBaseMs?: number;
   reconnectMaxMs?: number;
+  /** Debounce before a triggered re-harvest (default 300ms). */
+  harvestDebounceMs?: number;
+  /** First retry delay after an incomplete harvest (default 1000ms). */
+  harvestRetryBaseMs?: number;
+  /** Cap for exponential retry delay (default 30000ms). */
+  harvestRetryMaxMs?: number;
+  /** Max harvest attempts while bindings remain incomplete (default 6). */
+  harvestRetryMaxAttempts?: number;
 };
 
 /**
  * Watches the resource store for devices, opens one IS-12 session per NCP
  * endpoint, harvests monitors, binds touchpoints, and caches status updates.
+ *
+ * Re-harvests when senders/receivers are added or version-bumped, and when a
+ * device version changes without an NCP href change — with debounce and
+ * capped exponential backoff for late-created monitors.
  */
 export class NcpOrchestrator extends EventEmitter {
   private readonly store: ResourceStore;
@@ -65,9 +86,14 @@ export class NcpOrchestrator extends EventEmitter {
   private readonly webSocketFactory?: WebSocketFactory;
   private readonly reconnectBaseMs?: number;
   private readonly reconnectMaxMs?: number;
+  private readonly harvestDebounceMs: number;
+  private readonly harvestRetryBaseMs: number;
+  private readonly harvestRetryMaxMs: number;
+  private readonly harvestRetryMaxAttempts: number;
   private readonly sessions = new Map<Uuid, DeviceSession>();
   private readonly deviceStatus = new Map<Uuid, DeviceNcpStatus>();
   private readonly harvestGeneration = new Map<Uuid, number>();
+  private readonly harvestSchedule = new Map<Uuid, HarvestScheduleState>();
   readonly cache = new MonitorCache();
   private started = false;
 
@@ -78,6 +104,10 @@ export class NcpOrchestrator extends EventEmitter {
     this.webSocketFactory = options.webSocketFactory;
     this.reconnectBaseMs = options.reconnectBaseMs;
     this.reconnectMaxMs = options.reconnectMaxMs;
+    this.harvestDebounceMs = options.harvestDebounceMs ?? 300;
+    this.harvestRetryBaseMs = options.harvestRetryBaseMs ?? 1_000;
+    this.harvestRetryMaxMs = options.harvestRetryMaxMs ?? 30_000;
+    this.harvestRetryMaxAttempts = options.harvestRetryMaxAttempts ?? 6;
   }
 
   start(): void {
@@ -98,6 +128,10 @@ export class NcpOrchestrator extends EventEmitter {
     this.started = false;
     this.store.off("change", this.onStoreChange);
     this.cache.off("updated", this.onMonitorUpdated);
+
+    for (const deviceId of [...this.harvestSchedule.keys()]) {
+      this.clearHarvestSchedule(deviceId);
+    }
 
     const stops = [...this.sessions.values()].map((entry) =>
       entry.session.stop(),
@@ -234,6 +268,11 @@ export class NcpOrchestrator extends EventEmitter {
   }
 
   private onStoreChange = (event: ResourceStoreEvent): void => {
+    if (event.resourceType === "sender" || event.resourceType === "receiver") {
+      this.onSenderReceiverChange(event);
+      return;
+    }
+
     if (event.resourceType !== "device") {
       return;
     }
@@ -272,6 +311,40 @@ export class NcpOrchestrator extends EventEmitter {
     );
   };
 
+  private onSenderReceiverChange(event: ResourceStoreEvent): void {
+    if (event.type === "resource.removed") {
+      const binding = this.store.getMonitorBinding(event.id);
+      if (binding) {
+        this.store.setMonitorBinding(event.id, undefined);
+      }
+      // Parent device may still have the monitor object; refresh when known.
+      const deviceId =
+        binding?.deviceId ??
+        this.cache.getByResourceId(event.id)?.deviceId;
+      if (deviceId) {
+        this.scheduleHarvest(deviceId, `${event.resourceType}-removed`);
+      }
+      return;
+    }
+
+    const resource = event.resource as NmosSender | NmosReceiver;
+    const previous =
+      event.type === "resource.updated"
+        ? (event.previous as NmosSender | NmosReceiver | undefined)
+        : undefined;
+    const versionChanged = previous?.version !== resource.version;
+    if (event.type !== "resource.added" && !versionChanged) {
+      return;
+    }
+
+    this.scheduleHarvest(
+      resource.device_id,
+      event.type === "resource.added"
+        ? `${event.resourceType}-added`
+        : `${event.resourceType}-version`,
+    );
+  }
+
   private onMonitorUpdated = (state: MonitorState): void => {
     if (!state.resourceId) {
       return;
@@ -307,6 +380,9 @@ export class NcpOrchestrator extends EventEmitter {
 
     const existing = this.sessions.get(device.id);
     if (existing && existing.href === endpoint.href) {
+      if (previous && previous.version !== device.version) {
+        this.scheduleHarvest(device.id, "device-version");
+      }
       return;
     }
 
@@ -341,6 +417,7 @@ export class NcpOrchestrator extends EventEmitter {
       reconnectMaxMs: this.reconnectMaxMs,
       onReady: async (readySession) => {
         await this.harvestAndSubscribe(deviceId, readySession);
+        this.continueRetriesIfIncomplete(deviceId, "post-ready");
       },
     });
 
@@ -352,6 +429,7 @@ export class NcpOrchestrator extends EventEmitter {
 
     session.on("disconnected", () => {
       status.connected = false;
+      this.clearHarvestSchedule(deviceId);
       for (const state of this.cache.listForDevice(deviceId)) {
         if (state.resourceId) {
           this.store.setMonitorBinding(state.resourceId, undefined);
@@ -381,6 +459,161 @@ export class NcpOrchestrator extends EventEmitter {
 
     this.sessions.set(deviceId, { deviceId, href, session, status });
     session.connect();
+  }
+
+  /**
+   * Schedule a device model re-harvest. External triggers reset the retry
+   * counter; internal retries preserve it and use exponential backoff.
+   */
+  private scheduleHarvest(
+    deviceId: Uuid,
+    reason: string,
+    options: { resetAttempts?: boolean } = {},
+  ): void {
+    if (!this.started) {
+      return;
+    }
+    const entry = this.sessions.get(deviceId);
+    if (!entry?.session.isOpen) {
+      return;
+    }
+
+    const resetAttempts = options.resetAttempts !== false;
+    let state = this.harvestSchedule.get(deviceId);
+    if (!state) {
+      state = { attempts: 0, inFlight: false, pending: false };
+      this.harvestSchedule.set(deviceId, state);
+    }
+    if (resetAttempts) {
+      state.attempts = 0;
+    }
+
+    if (state.timer) {
+      clearTimeout(state.timer);
+    }
+
+    const delay =
+      state.attempts === 0
+        ? this.harvestDebounceMs
+        : Math.min(
+            this.harvestRetryBaseMs * 2 ** (state.attempts - 1),
+            this.harvestRetryMaxMs,
+          );
+
+    this.logger.debug(
+      { deviceId, reason, delayMs: delay, attempts: state.attempts },
+      "Scheduling NCP monitor harvest",
+    );
+
+    state.timer = setTimeout(() => {
+      void this.runScheduledHarvest(deviceId, reason);
+    }, delay);
+  }
+
+  private async runScheduledHarvest(
+    deviceId: Uuid,
+    reason: string,
+  ): Promise<void> {
+    const state = this.harvestSchedule.get(deviceId);
+    if (!state) {
+      return;
+    }
+    state.timer = undefined;
+
+    const entry = this.sessions.get(deviceId);
+    if (!entry?.session.isOpen) {
+      this.clearHarvestSchedule(deviceId);
+      return;
+    }
+
+    if (state.inFlight) {
+      state.pending = true;
+      return;
+    }
+
+    state.inFlight = true;
+    try {
+      incrementMetric("ncpReharvests");
+      await this.harvestAndSubscribe(deviceId, entry.session);
+      this.continueRetriesIfIncomplete(deviceId, reason);
+    } catch (error) {
+      this.logger.error(
+        { err: error, deviceId, reason },
+        "Scheduled NCP harvest failed",
+      );
+      this.continueRetriesIfIncomplete(deviceId, `error:${reason}`);
+    } finally {
+      state.inFlight = false;
+      if (state.pending) {
+        state.pending = false;
+        this.scheduleHarvest(deviceId, "coalesced", { resetAttempts: false });
+      }
+    }
+  }
+
+  private continueRetriesIfIncomplete(deviceId: Uuid, reason: string): void {
+    if (!this.started || !this.sessions.get(deviceId)?.session.isOpen) {
+      this.clearHarvestSchedule(deviceId);
+      return;
+    }
+
+    if (!this.hasIncompleteBindings(deviceId)) {
+      this.clearHarvestSchedule(deviceId);
+      return;
+    }
+
+    let state = this.harvestSchedule.get(deviceId);
+    if (!state) {
+      state = { attempts: 0, inFlight: false, pending: false };
+      this.harvestSchedule.set(deviceId, state);
+    }
+    state.attempts += 1;
+
+    if (state.attempts >= this.harvestRetryMaxAttempts) {
+      this.logger.warn(
+        {
+          deviceId,
+          attempts: state.attempts,
+          reason,
+          unbound: this.listUnboundResourceIds(deviceId),
+        },
+        "Giving up NCP re-harvest retries; some senders/receivers still unbound",
+      );
+      this.clearHarvestSchedule(deviceId);
+      return;
+    }
+
+    this.scheduleHarvest(deviceId, `retry:${reason}`, { resetAttempts: false });
+  }
+
+  private hasIncompleteBindings(deviceId: Uuid): boolean {
+    return this.listUnboundResourceIds(deviceId).length > 0;
+  }
+
+  private listUnboundResourceIds(deviceId: Uuid): string[] {
+    const unbound: string[] = [];
+    for (const sender of this.store.getSendersForDevice(deviceId)) {
+      if (!this.cache.getByResourceId(sender.id)) {
+        unbound.push(sender.id);
+      }
+    }
+    for (const receiver of this.store.getReceiversForDevice(deviceId)) {
+      if (!this.cache.getByResourceId(receiver.id)) {
+        unbound.push(receiver.id);
+      }
+    }
+    return unbound;
+  }
+
+  private clearHarvestSchedule(deviceId: Uuid): void {
+    const state = this.harvestSchedule.get(deviceId);
+    if (!state) {
+      return;
+    }
+    if (state.timer) {
+      clearTimeout(state.timer);
+    }
+    this.harvestSchedule.delete(deviceId);
   }
 
   private async harvestAndSubscribe(
@@ -467,6 +700,7 @@ export class NcpOrchestrator extends EventEmitter {
   }
 
   private async teardownDevice(deviceId: Uuid): Promise<void> {
+    this.clearHarvestSchedule(deviceId);
     const entry = this.sessions.get(deviceId);
     if (entry) {
       await entry.session.stop();

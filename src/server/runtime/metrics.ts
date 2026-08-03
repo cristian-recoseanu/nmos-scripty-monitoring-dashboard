@@ -25,6 +25,7 @@ export type RuntimeMetrics = {
     malformedGrains: number;
     malformedIs12Messages: number;
     ncpReconnects: number;
+    ncpReharvests: number;
     is04WsReconnects: number;
   };
   startedAt?: number;
@@ -37,6 +38,7 @@ const counters: RuntimeMetrics["counters"] = {
   malformedGrains: 0,
   malformedIs12Messages: 0,
   ncpReconnects: 0,
+  ncpReharvests: 0,
   is04WsReconnects: 0,
 };
 
@@ -71,6 +73,7 @@ export function resetMetrics(): void {
   counters.malformedGrains = 0;
   counters.malformedIs12Messages = 0;
   counters.ncpReconnects = 0;
+  counters.ncpReharvests = 0;
   counters.is04WsReconnects = 0;
   subscriptionRetries = 0;
   startedAt = undefined;

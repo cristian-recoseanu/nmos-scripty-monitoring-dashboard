@@ -11,7 +11,9 @@ import {
   resetCounterThrottle,
 } from "@/server/monitoring";
 
-function createMockSocket(): WebSocketLike & {
+function createMockSocket(options?: {
+  findMembers?: () => unknown[];
+}): WebSocketLike & {
   trigger: (type: string, event?: Record<string, unknown>) => void;
   sent: string[];
 } {
@@ -20,6 +22,16 @@ function createMockSocket(): WebSocketLike & {
     Array<(event: Record<string, unknown>) => void>
   >();
   const sent: string[] = [];
+  const findMembers =
+    options?.findMembers ??
+    (() => [
+      {
+        role: "ReceiverMonitor_01",
+        oid: 10,
+        classId: [1, 2, 2, 1],
+        userLabel: "Rx",
+      },
+    ]);
 
   return {
     readyState: 0,
@@ -60,14 +72,7 @@ function createMockSocket(): WebSocketLike & {
 
           // FindMembersByClassId
           if (command.methodId.level === 2 && command.methodId.index === 4) {
-            value = [
-              {
-                role: "ReceiverMonitor_01",
-                oid: 10,
-                classId: [1, 2, 2, 1],
-                userLabel: "Rx",
-              },
-            ];
+            value = findMembers();
           }
 
           // Get property
@@ -292,6 +297,157 @@ describe("NcpOrchestrator", () => {
         "ws://127.0.0.1:9090/ncp",
       );
     });
+
+    await orchestrator.stop();
+  });
+
+  it("re-harvests when a sender/receiver is added after the NCP session is open", async () => {
+    const logger = createLogger({ level: "silent", pretty: false });
+    const store = new ResourceStore();
+    const sockets: ReturnType<typeof createMockSocket>[] = [];
+    let includeMonitor = false;
+
+    const orchestrator = new NcpOrchestrator({
+      store,
+      logger,
+      harvestDebounceMs: 5,
+      harvestRetryBaseMs: 5,
+      harvestRetryMaxMs: 20,
+      harvestRetryMaxAttempts: 4,
+      webSocketFactory: () => {
+        const socket = createMockSocket({
+          findMembers: () =>
+            includeMonitor
+              ? [
+                  {
+                    role: "ReceiverMonitor_01",
+                    oid: 10,
+                    classId: [1, 2, 2, 1],
+                    userLabel: "Rx",
+                  },
+                ]
+              : [],
+        });
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    orchestrator.start();
+    store.upsert("device", device);
+    expect(sockets.length).toBeGreaterThanOrEqual(1);
+    sockets[0].readyState = 1;
+    sockets[0].trigger("open");
+
+    await vi.waitFor(() => {
+      expect(orchestrator.getDeviceStatus("device-1")?.connected).toBe(true);
+    });
+    expect(orchestrator.cache.getByResourceId("receiver-1")).toBeUndefined();
+
+    includeMonitor = true;
+    store.upsert("receiver", receiver);
+
+    await vi.waitFor(() => {
+      expect(orchestrator.cache.getByResourceId("receiver-1")?.health).toBe(
+        "degraded",
+      );
+    });
+    expect(store.getMonitorBinding("receiver-1")?.monitorOid).toBe(10);
+
+    await orchestrator.stop();
+  });
+
+  it("re-harvests on device version bump when NCP href is unchanged", async () => {
+    const logger = createLogger({ level: "silent", pretty: false });
+    const store = new ResourceStore();
+    const sockets: ReturnType<typeof createMockSocket>[] = [];
+    let includeMonitor = false;
+
+    const orchestrator = new NcpOrchestrator({
+      store,
+      logger,
+      harvestDebounceMs: 5,
+      harvestRetryBaseMs: 5,
+      harvestRetryMaxMs: 20,
+      harvestRetryMaxAttempts: 4,
+      webSocketFactory: () => {
+        const socket = createMockSocket({
+          findMembers: () =>
+            includeMonitor
+              ? [
+                  {
+                    role: "ReceiverMonitor_01",
+                    oid: 10,
+                    classId: [1, 2, 2, 1],
+                    userLabel: "Rx",
+                  },
+                ]
+              : [],
+        });
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    orchestrator.start();
+    store.upsert("receiver", receiver);
+    store.upsert("device", device);
+    sockets[0].readyState = 1;
+    sockets[0].trigger("open");
+
+    await vi.waitFor(() => {
+      expect(orchestrator.getDeviceStatus("device-1")?.connected).toBe(true);
+    });
+    expect(orchestrator.cache.getByResourceId("receiver-1")).toBeUndefined();
+
+    includeMonitor = true;
+    store.upsert("device", { ...device, version: "2:0" });
+
+    await vi.waitFor(() => {
+      expect(orchestrator.cache.getByResourceId("receiver-1")).toBeDefined();
+    });
+
+    await orchestrator.stop();
+  });
+
+  it("retries harvest while monitors are still missing, then stops", async () => {
+    const logger = createLogger({ level: "silent", pretty: false });
+    const store = new ResourceStore();
+    const sockets: ReturnType<typeof createMockSocket>[] = [];
+    let harvestCalls = 0;
+
+    const orchestrator = new NcpOrchestrator({
+      store,
+      logger,
+      harvestDebounceMs: 5,
+      harvestRetryBaseMs: 5,
+      harvestRetryMaxMs: 10,
+      harvestRetryMaxAttempts: 3,
+      webSocketFactory: () => {
+        const socket = createMockSocket({
+          findMembers: () => {
+            harvestCalls += 1;
+            return [];
+          },
+        });
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    orchestrator.start();
+    store.upsert("receiver", receiver);
+    store.upsert("device", device);
+    sockets[0].readyState = 1;
+    sockets[0].trigger("open");
+
+    await vi.waitFor(() => {
+      expect(harvestCalls).toBeGreaterThanOrEqual(3);
+    });
+
+    const callsAfterCap = harvestCalls;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(harvestCalls).toBe(callsAfterCap);
 
     await orchestrator.stop();
   });

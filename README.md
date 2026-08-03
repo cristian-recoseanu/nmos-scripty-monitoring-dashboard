@@ -73,6 +73,7 @@ Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, br
 - Prefer non-persistent Query API subscriptions (`persist: false`); they are cleaned up when WebSockets close.
 - IS-05 `/active` (+ sender `/transportfile`) is refreshed when the matching IS-04 sender/receiver `version` bumps (RTP only; no IS-05 writes).
 - Registry / NCP disconnects auto-retry with backoff; malformed grains and IS-12 messages are logged and skipped.
+- NCP monitor harvest re-runs when senders/receivers are added or version-bumped, and when a device version changes (even if the NCP href is unchanged), with debounce and capped exponential backoff for late-created monitors.
 - Per-device NCP failures are isolated so the rest of the tree stays live.
 - `/api/status` exposes registry connection state plus lightweight in-process metrics (resource counts, NCP sessions, reconnect counters).
 

@@ -61,7 +61,8 @@ Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, br
 │    ├─ Is05Orchestrator ──HTTP GET──► Connection API (RTP)    │
 │    ├─ NcpOrchestrator  ──IS-12/NCP──► per-device sessions    │
 │    ├─ Health aggregator → SystemSnapshotDto                  │
-│    └─ RuntimeEventBus (debounced SSE fan-out)                │
+│    ├─ RuntimeEventBus (debounced SSE fan-out)                │
+│    └─ optional MCP HTTP (Streamable) when mcp.enabled        │
 └─────────────────────────────────────────────────────────────┘
          │                    │                    │
          ▼                    ▼                    ▼
@@ -76,6 +77,7 @@ Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, br
 - NCP monitor harvest re-runs when senders/receivers are added or version-bumped, and when a device version changes (even if the NCP href is unchanged), with debounce and capped exponential backoff for late-created monitors.
 - Per-device NCP failures are isolated so the rest of the tree stays live.
 - `/api/status` exposes registry connection state plus lightweight in-process metrics (resource counts, NCP sessions, reconnect counters).
+- Optional MCP Streamable HTTP server (default off, loopback) exposes read-only investigation tools for external LLM clients.
 
 
 
@@ -125,7 +127,33 @@ Open `/` for the split dashboard:
 | `LOG_LEVEL`               | `fatal` … `trace` / `silent`                      |
 | `LOG_FILE`                | Persistent log path (default `logs/app.log`)      |
 | `PORT`                    | App listen port (default 3000)                    |
+| `MCP_ENABLED`             | Enable MCP HTTP server (default `false`)          |
+| `MCP_HOST`                | MCP bind address (default `127.0.0.1`)            |
+| `MCP_PORT`                | MCP listen port (default `3100`)                  |
+| `MCP_PATH`                | MCP endpoint path (default `/mcp`)                |
 
+
+
+## MCP (optional)
+
+Read-only **Model Context Protocol** tools for LLM root-cause analysis over the same live domain the dashboard uses (IS-04 + IS-05 + BCP-008 + bubbled health + ack).
+
+- **Default off.** When `mcp.enabled` / `MCP_ENABLED` is false, nothing listens.
+- **HTTP only** (Streamable HTTP on a dedicated port, not the Next.js `PORT`).
+
+```yaml
+mcp:
+  enabled: true
+  host: 127.0.0.1
+  port: 3100
+  path: /mcp
+```
+
+Client URL example: `http://127.0.0.1:3100/mcp`
+
+**Example prompts:** system problems overview; summarise node/device issues; investigate a receiver or sender.
+
+**Tools:** `get_system_overview`, `list_nodes`, `get_node`, `list_devices`, `get_device`, `list_senders`, `list_receivers`, `get_sender`, `get_receiver`, `get_connection`, `list_problems`, `summarise_entity`.
 
 
 

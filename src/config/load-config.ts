@@ -126,6 +126,27 @@ function configFromEnv(env: NodeJS.ProcessEnv): RawConfig {
     result.appPort = appPort;
   }
 
+  const mcp: RawConfig = {};
+  const mcpEnabled = envValue(env, "MCP_ENABLED");
+  if (mcpEnabled !== undefined) {
+    mcp.enabled = mcpEnabled;
+  }
+  const mcpHost = envValue(env, "MCP_HOST");
+  if (mcpHost !== undefined) {
+    mcp.host = mcpHost;
+  }
+  const mcpPort = envValue(env, "MCP_PORT");
+  if (mcpPort !== undefined) {
+    mcp.port = mcpPort;
+  }
+  const mcpPath = envValue(env, "MCP_PATH");
+  if (mcpPath !== undefined) {
+    mcp.path = mcpPath;
+  }
+  if (Object.keys(mcp).length > 0) {
+    result.mcp = mcp;
+  }
+
   return result;
 }
 
@@ -206,6 +227,12 @@ export function summariseConfig(config: AppConfig): Record<string, unknown> {
     logLevel: config.logLevel,
     logFile: config.logFile,
     appPort: config.appPort,
+    mcp: {
+      enabled: config.mcp.enabled,
+      host: config.mcp.host,
+      port: config.mcp.port,
+      path: config.mcp.path,
+    },
   };
 }
 

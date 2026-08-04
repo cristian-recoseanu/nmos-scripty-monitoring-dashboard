@@ -47,6 +47,29 @@ export const appConfigSchema = z.object({
   /** Persistent log file path (also writes to stdout). Default: logs/app.log */
   logFile: z.string().min(1).default("logs/app.log"),
   appPort: z.coerce.number().int().min(1).max(65535).default(3000),
+  /**
+   * Optional MCP (Model Context Protocol) HTTP server for LLM investigation tools.
+   * Hard off when `enabled` is false — no listener, no tools registered.
+   */
+  mcp: z
+    .object({
+      enabled: booleanFromEnv.default(false),
+      /** Bind address; default loopback. Prefer 127.0.0.1 unless you add auth. */
+      host: z.string().min(1).default("127.0.0.1"),
+      port: z.coerce.number().int().min(1).max(65535).default(3100),
+      /** Single Streamable HTTP MCP endpoint path (POST). */
+      path: z
+        .string()
+        .min(1)
+        .default("/mcp")
+        .transform((value) => (value.startsWith("/") ? value : `/${value}`)),
+    })
+    .default({
+      enabled: false,
+      host: "127.0.0.1",
+      port: 3100,
+      path: "/mcp",
+    }),
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;

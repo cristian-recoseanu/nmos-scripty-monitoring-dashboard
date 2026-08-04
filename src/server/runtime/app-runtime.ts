@@ -30,6 +30,10 @@ import {
   markRuntimeStarted,
   type RuntimeMetrics,
 } from "@/server/runtime/metrics";
+import {
+  startMcpHttpServer,
+  type McpHttpServerHandle,
+} from "@/server/mcp";
 
 const APP_VERSION = "0.1.0";
 /** Debounce SSE snapshot fan-out under large-registry grain storms. */
@@ -69,6 +73,7 @@ export class AppRuntime {
   private is04?: Is04Orchestrator;
   private ncp?: NcpOrchestrator;
   private is05?: Is05Orchestrator;
+  private mcp?: McpHttpServerHandle;
   private eventBus: RuntimeEventBus;
   private acknowledgements: AcknowledgementStore;
   private started = false;
@@ -246,6 +251,31 @@ export class AppRuntime {
     markRuntimeStarted();
     this.started = true;
     this.eventBus.publishSnapshotNow();
+
+    if (this.config.mcp.enabled) {
+      try {
+        this.mcp = await startMcpHttpServer({
+          config: this.config.mcp,
+          logger: this.logger,
+          context: {
+            getSnapshot: () => this.getSnapshot(),
+            getDetail: (kind, id) => this.getDetail(kind, id),
+            getStatus: () => this.getStatus(),
+            getStore: () => this.store,
+            getMonitor: (resourceId) =>
+              this.ncp?.cache.getByResourceId(resourceId),
+            getDeviceNcpStatus: (deviceId) => this.ncp?.getDeviceStatus(deviceId),
+            getIs05: (resourceId) => this.is05?.get(resourceId),
+            isAcknowledged: (kind, id) =>
+              this.acknowledgements.isAcknowledged(kind, id),
+            logger: this.logger,
+          },
+        });
+      } catch (error) {
+        this.logger.error({ err: error }, "MCP HTTP server failed to start");
+      }
+    }
+
     this.logger.info(
       { metrics: this.getMetrics(), versions },
       "App runtime started",
@@ -253,6 +283,8 @@ export class AppRuntime {
   }
 
   async stop(): Promise<void> {
+    await this.mcp?.stop();
+    this.mcp = undefined;
     await this.is05?.stop();
     await this.ncp?.stop();
     await this.is04?.stop();

@@ -25,6 +25,10 @@ describe("appConfigSchema", () => {
     expect(config.logLevel).toBe("info");
     expect(config.logFile).toBe("logs/app.log");
     expect(config.appPort).toBe(3000);
+    expect(config.mcp.enabled).toBe(false);
+    expect(config.mcp.host).toBe("127.0.0.1");
+    expect(config.mcp.port).toBe(3100);
+    expect(config.mcp.path).toBe("/mcp");
   });
 
   it("rejects missing host", () => {
@@ -100,6 +104,10 @@ describe("loadConfig", () => {
         NMOS_REGISTRY_PORT: "3211",
         LOG_LEVEL: "debug",
         APP_PORT: "4000",
+        MCP_ENABLED: "true",
+        MCP_HOST: "127.0.0.1",
+        MCP_PORT: "3200",
+        MCP_PATH: "mcp-rpc",
       },
     });
 
@@ -107,6 +115,9 @@ describe("loadConfig", () => {
     expect(config.registry.port).toBe(3211);
     expect(config.logLevel).toBe("debug");
     expect(config.appPort).toBe(4000);
+    expect(config.mcp.enabled).toBe(true);
+    expect(config.mcp.port).toBe(3200);
+    expect(config.mcp.path).toBe("/mcp-rpc");
   });
 
   it("parses a full registry URL from NMOS_REGISTRY_URL", () => {

@@ -251,6 +251,7 @@ export class AppRuntime {
     markRuntimeStarted();
     this.started = true;
     this.eventBus.publishSnapshotNow();
+    this.eventBus.startPeriodicRefresh();
 
     if (this.config.mcp.enabled) {
       try {
@@ -283,6 +284,7 @@ export class AppRuntime {
   }
 
   async stop(): Promise<void> {
+    this.eventBus.stopPeriodicRefresh();
     await this.mcp?.stop();
     this.mcp = undefined;
     await this.is05?.stop();

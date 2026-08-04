@@ -168,4 +168,90 @@ describe("Is05Orchestrator", () => {
     });
     await orch.stop();
   });
+
+  it("fails over to the next sr-ctrl href when the first is unreachable", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      const href = String(url);
+      if (href.includes("10.0.0.1")) {
+        throw new TypeError("fetch failed");
+      }
+      if (href.includes("/senders/") && href.endsWith("/active")) {
+        return new Response(
+          JSON.stringify({
+            receiver_id: null,
+            master_enable: true,
+            activation: {},
+            transport_params: [],
+          }),
+          { status: 200 },
+        );
+      }
+      if (href.includes("/transportfile")) {
+        return new Response("v=0", {
+          status: 200,
+          headers: { "Content-Type": "application/sdp" },
+        });
+      }
+      if (href.includes("/receivers/") && href.endsWith("/active")) {
+        return new Response(
+          JSON.stringify({
+            sender_id: null,
+            master_enable: false,
+            activation: {},
+            transport_file: { data: null, type: null },
+            transport_params: [],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response("nope", { status: 404 });
+    });
+
+    const store = new ResourceStore();
+    store.upsert("device", {
+      id: "device-1",
+      version: "1:0",
+      label: "Device",
+      description: "",
+      type: "urn:x-nmos:device:generic",
+      node_id: "node-1",
+      controls: [
+        {
+          type: "urn:x-nmos:control:sr-ctrl/v1.1",
+          href: "http://10.0.0.1/x-nmos/connection/v1.1/",
+        },
+        {
+          type: "urn:x-nmos:control:sr-ctrl/v1.1",
+          href: "http://192.168.1.10/x-nmos/connection/v1.1/",
+        },
+      ],
+    });
+    store.upsert("sender", {
+      id: "sender-1",
+      version: "1:0",
+      label: "Sender",
+      description: "",
+      device_id: "device-1",
+      flow_id: null,
+      transport: "urn:x-nmos:transport:rtp",
+    });
+
+    const orch = new Is05Orchestrator({
+      store,
+      logger,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    orch.start();
+    await vi.waitFor(() => {
+      expect(orch.get("sender-1")?.status).toBe("available");
+    });
+    expect(orch.get("sender-1")?.connectionApiHref).toBe(
+      "http://192.168.1.10/x-nmos/connection/v1.1/",
+    );
+    expect(
+      fetchImpl.mock.calls.some((call) => String(call[0]).includes("10.0.0.1")),
+    ).toBe(true);
+
+    await orch.stop();
+  });
 });

@@ -451,4 +451,62 @@ describe("NcpOrchestrator", () => {
 
     await orchestrator.stop();
   });
+
+  it("fails over to the next NCP href when the first is unreachable", async () => {
+    const logger = createLogger({ level: "silent", pretty: false });
+    const store = new ResourceStore();
+    const sockets: Array<{ href: string; socket: ReturnType<typeof createMockSocket> }> =
+      [];
+
+    const orchestrator = new NcpOrchestrator({
+      store,
+      logger,
+      connectProbeTimeoutMs: 30,
+      webSocketFactory: (url) => {
+        const socket = createMockSocket();
+        sockets.push({ href: url, socket });
+        queueMicrotask(() => {
+          if (url.includes("unreachable")) {
+            socket.trigger("error");
+            socket.trigger("close");
+            return;
+          }
+          socket.readyState = 1;
+          socket.trigger("open");
+        });
+        return socket;
+      },
+    });
+
+    const harvested = new Promise<{ deviceId: string }>((resolve) => {
+      orchestrator.on("harvested", resolve);
+    });
+
+    orchestrator.start();
+    store.upsert("receiver", receiver);
+    store.upsert("device", {
+      ...device,
+      controls: [
+        {
+          type: "urn:x-nmos:control:ncp/v1.0",
+          href: "ws://unreachable/ncp",
+        },
+        {
+          type: "urn:x-nmos:control:ncp/v1.0",
+          href: "ws://127.0.0.1:8080/ncp",
+        },
+      ],
+    });
+
+    await harvested;
+
+    expect(orchestrator.getDeviceStatus("device-1")?.href).toBe(
+      "ws://127.0.0.1:8080/ncp",
+    );
+    expect(orchestrator.getDeviceStatus("device-1")?.connected).toBe(true);
+    expect(sockets.some((s) => s.href.includes("unreachable"))).toBe(true);
+    expect(sockets.some((s) => s.href.includes("127.0.0.1"))).toBe(true);
+
+    await orchestrator.stop();
+  });
 });

@@ -219,7 +219,7 @@ export class Is05Orchestrator extends EventEmitter {
     }
 
     const endpoint = discoverConnectionEndpoint(device);
-    if (endpoint.availability !== "available" || !endpoint.href) {
+    if (endpoint.availability !== "available" || endpoint.candidates.length === 0) {
       this.cache.set({
         resourceType,
         resourceId,
@@ -234,8 +234,13 @@ export class Is05Orchestrator extends EventEmitter {
 
     if (endpoint.ambiguous) {
       this.logger.warn(
-        { deviceId: device.id, href: endpoint.href, controlType: endpoint.controlType },
-        "Multiple sr-ctrl controls; preferred one aligned with href version",
+        {
+          deviceId: device.id,
+          href: endpoint.href,
+          controlType: endpoint.controlType,
+          candidates: endpoint.candidates.map((c) => c.href),
+        },
+        "Multiple sr-ctrl controls; will try candidates in preference order until one works",
       );
     }
 
@@ -309,7 +314,7 @@ export class Is05Orchestrator extends EventEmitter {
     }
 
     const endpoint = discoverConnectionEndpoint(device);
-    if (endpoint.availability !== "available" || !endpoint.href) {
+    if (endpoint.availability !== "available" || endpoint.candidates.length === 0) {
       this.cache.set({
         resourceType,
         resourceId,
@@ -322,80 +327,112 @@ export class Is05Orchestrator extends EventEmitter {
       return;
     }
 
-    try {
-      const client = this.clientFor(device.id, endpoint.href);
-      if (resourceType === "sender") {
-        const active = await client.getSenderActive(resourceId);
-        let transportFile: Is05CacheEntry["transportFile"] = null;
-        try {
-          transportFile = await client.getSenderTransportFile(resourceId);
-        } catch (error) {
-          if (
-            !(error instanceof ConnectionApiError && error.status === 404)
-          ) {
-            throw error;
+    const failed: Array<{ href: string; error: string }> = [];
+    for (const candidate of endpoint.candidates) {
+      try {
+        const client = this.clientFor(device.id, candidate.href);
+        if (resourceType === "sender") {
+          const active = await client.getSenderActive(resourceId);
+          let transportFile: Is05CacheEntry["transportFile"] = null;
+          try {
+            transportFile = await client.getSenderTransportFile(resourceId);
+          } catch (error) {
+            if (
+              !(error instanceof ConnectionApiError && error.status === 404)
+            ) {
+              throw error;
+            }
+            transportFile = null;
           }
-          transportFile = null;
+          this.cache.set({
+            resourceType,
+            resourceId,
+            deviceId: resource.device_id,
+            status: "available",
+            connectionApiHref: candidate.href,
+            active,
+            transportFile,
+            fetchedAt: Date.now(),
+            sourceIs04Version: resource.version,
+          });
+        } else {
+          const active = await client.getReceiverActive(resourceId);
+          this.cache.set({
+            resourceType,
+            resourceId,
+            deviceId: resource.device_id,
+            status: "available",
+            connectionApiHref: candidate.href,
+            active,
+            transportFile: transportFileFromReceiverActive(
+              active as Is05ReceiverActive,
+            ),
+            fetchedAt: Date.now(),
+            sourceIs04Version: resource.version,
+          });
         }
-        this.cache.set({
-          resourceType,
-          resourceId,
-          deviceId: resource.device_id,
-          status: "available",
-          connectionApiHref: endpoint.href,
-          active,
-          transportFile,
-          fetchedAt: Date.now(),
-          sourceIs04Version: resource.version,
-        });
-      } else {
-        const active = await client.getReceiverActive(resourceId);
-        this.cache.set({
-          resourceType,
-          resourceId,
-          deviceId: resource.device_id,
-          status: "available",
-          connectionApiHref: endpoint.href,
-          active,
-          transportFile: transportFileFromReceiverActive(
-            active as Is05ReceiverActive,
-          ),
-          fetchedAt: Date.now(),
-          sourceIs04Version: resource.version,
-        });
-      }
 
-      this.logger.info(
-        {
-          resourceId,
-          resourceType,
-          deviceId: resource.device_id,
-          version: resource.version,
-        },
-        "IS-05 harvest succeeded",
-      );
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "IS-05 harvest failed";
-      const status =
-        error instanceof ConnectionApiError ? error.status : undefined;
-      this.logger.error(
-        { err: error, resourceId, resourceType, status },
-        "IS-05 harvest failed",
-      );
-      this.cache.set({
-        resourceType,
-        resourceId,
-        deviceId: resource.device_id,
-        status: "error",
-        connectionApiHref: endpoint.href,
-        sourceIs04Version: resource.version,
-        error: message,
-        active: this.cache.get(resourceId)?.active,
-        transportFile: this.cache.get(resourceId)?.transportFile,
-        fetchedAt: this.cache.get(resourceId)?.fetchedAt,
-      });
+        if (failed.length > 0) {
+          this.logger.info(
+            {
+              resourceId,
+              resourceType,
+              deviceId: resource.device_id,
+              selected: candidate.href,
+              failed,
+            },
+            "IS-05 harvest succeeded after endpoint failover",
+          );
+        } else {
+          this.logger.info(
+            {
+              resourceId,
+              resourceType,
+              deviceId: resource.device_id,
+              version: resource.version,
+              connectionApiHref: candidate.href,
+            },
+            "IS-05 harvest succeeded",
+          );
+        }
+        return;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "IS-05 harvest failed";
+        const status =
+          error instanceof ConnectionApiError ? error.status : undefined;
+        failed.push({ href: candidate.href, error: message });
+        this.logger.warn(
+          {
+            err: error,
+            resourceId,
+            resourceType,
+            status,
+            href: candidate.href,
+            remaining: endpoint.candidates.length - failed.length,
+          },
+          "IS-05 harvest failed for candidate; trying next if available",
+        );
+      }
     }
+
+    const last = failed[failed.length - 1];
+    this.logger.error(
+      { resourceId, resourceType, failed },
+      "IS-05 harvest failed for all Connection API candidates",
+    );
+    this.cache.set({
+      resourceType,
+      resourceId,
+      deviceId: resource.device_id,
+      status: "error",
+      connectionApiHref: last?.href ?? endpoint.href,
+      sourceIs04Version: resource.version,
+      error: last?.error ?? "IS-05 harvest failed",
+      active: this.cache.get(resourceId)?.active,
+      transportFile: this.cache.get(resourceId)?.transportFile,
+      fetchedAt: this.cache.get(resourceId)?.fetchedAt,
+    });
   }
 
   private clientFor(deviceId: Uuid, href: string): ConnectionHttpClient {

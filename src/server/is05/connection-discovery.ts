@@ -1,21 +1,32 @@
 import {
-  findSrCtrlControl,
+  listSrCtrlControls,
   type NmosControl,
   type NmosDevice,
 } from "@/server/is04";
 
 export type ConnectionApiAvailability = "available" | "unavailable";
 
+export type ConnectionApiCandidate = {
+  href: string;
+  controlType: string;
+};
+
 export type ConnectionApiEndpoint = {
   availability: ConnectionApiAvailability;
+  /** Preferred / first http(s) candidate. */
   href?: string;
   controlType?: string;
-  /** True when multiple sr-ctrl controls were present and one was preferred. */
+  /** True when more than one sr-ctrl control was advertised. */
   ambiguous?: boolean;
+  /**
+   * Ordered http(s) candidates to try until a harvest succeeds.
+   * Empty when no usable Connection API control is advertised.
+   */
+  candidates: ConnectionApiCandidate[];
 };
 
 /**
- * Discover the IS-05 Connection API base URL from an IS-04 device controls array.
+ * Discover the IS-05 Connection API base URL(s) from an IS-04 device controls array.
  */
 export function discoverConnectionEndpoint(
   device: NmosDevice,
@@ -26,43 +37,56 @@ export function discoverConnectionEndpoint(
 export function discoverConnectionFromControls(
   controls: NmosControl[] | undefined,
 ): ConnectionApiEndpoint {
-  const matches =
-    controls?.filter((control) =>
-      control.type === "urn:x-nmos:control:sr-ctrl" ||
-      control.type.startsWith("urn:x-nmos:control:sr-ctrl/"),
-    ) ?? [];
-  const control = findSrCtrlControl(controls);
-  if (!control?.href) {
-    return { availability: "unavailable" };
+  const listed = listSrCtrlControls(controls);
+  if (listed.length === 0) {
+    return { availability: "unavailable", candidates: [] };
   }
 
-  if (
-    !control.href.startsWith("http://") &&
-    !control.href.startsWith("https://")
-  ) {
+  const candidates: ConnectionApiCandidate[] = [];
+  for (const control of listed) {
+    if (
+      control.href.startsWith("http://") ||
+      control.href.startsWith("https://")
+    ) {
+      candidates.push({
+        href: control.href.replace(/\/?$/, "/"),
+        controlType: control.type,
+      });
+    }
+  }
+
+  if (candidates.length === 0) {
+    const first = listed[0];
     return {
       availability: "unavailable",
-      href: control.href,
-      controlType: control.type,
-      ambiguous: matches.length > 1,
+      href: first?.href,
+      controlType: first?.type,
+      ambiguous: listed.length > 1,
+      candidates: [],
     };
   }
 
   return {
     availability: "available",
-    href: control.href.replace(/\/?$/, "/"),
-    controlType: control.type,
-    ambiguous: matches.length > 1,
+    href: candidates[0]!.href,
+    controlType: candidates[0]!.controlType,
+    ambiguous: listed.length > 1,
+    candidates,
   };
 }
 
+/** True when the set of usable Connection API candidate hrefs changed. */
 export function connectionApiHrefChanged(
   previous: NmosDevice | undefined,
   next: NmosDevice,
 ): boolean {
-  const prevHref = discoverConnectionEndpoint(
+  const prevHrefs = discoverConnectionEndpoint(
     previous ?? { ...next, controls: [] },
-  ).href;
-  const nextHref = discoverConnectionEndpoint(next).href;
-  return prevHref !== nextHref;
+  )
+    .candidates.map((c) => c.href)
+    .join("\0");
+  const nextHrefs = discoverConnectionEndpoint(next)
+    .candidates.map((c) => c.href)
+    .join("\0");
+  return prevHrefs !== nextHrefs;
 }

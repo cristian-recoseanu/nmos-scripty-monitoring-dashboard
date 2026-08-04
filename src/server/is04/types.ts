@@ -156,7 +156,32 @@ export function isRtpTransport(transport: string): boolean {
 export function findNcpControl(
   controls: NmosControl[] | undefined,
 ): NmosControl | undefined {
-  return controls?.find((control) => isNcpControlType(control.type));
+  return listNcpControls(controls)[0];
+}
+
+/**
+ * All NCP controls in advertisement order, de-duplicated by href.
+ * Callers that need reachability failover should try these in order.
+ */
+export function listNcpControls(
+  controls: NmosControl[] | undefined,
+): NmosControl[] {
+  if (!controls?.length) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const listed: NmosControl[] = [];
+  for (const control of controls) {
+    if (!isNcpControlType(control.type) || !control.href) {
+      continue;
+    }
+    if (seen.has(control.href)) {
+      continue;
+    }
+    seen.add(control.href);
+    listed.push(control);
+  }
+  return listed;
 }
 
 /**
@@ -167,12 +192,23 @@ export function findNcpControl(
 export function findSrCtrlControl(
   controls: NmosControl[] | undefined,
 ): NmosControl | undefined {
-  const matches = controls?.filter((control) => isSrCtrlControlType(control.type)) ?? [];
-  if (matches.length === 0) {
-    return undefined;
-  }
-  if (matches.length === 1) {
-    return matches[0];
+  return listSrCtrlControls(controls)[0];
+}
+
+/**
+ * Ordered `sr-ctrl` controls for failover: version-aligned first (highest
+ * version first within each group), then remaining matches. De-duplicated by
+ * normalised href.
+ */
+export function listSrCtrlControls(
+  controls: NmosControl[] | undefined,
+): NmosControl[] {
+  const matches =
+    controls?.filter(
+      (control) => isSrCtrlControlType(control.type) && Boolean(control.href),
+    ) ?? [];
+  if (matches.length <= 1) {
+    return matches;
   }
 
   const aligned = matches.filter((control) => {
@@ -180,15 +216,27 @@ export function findSrCtrlControl(
     const hrefVersion = hrefPathVersion(control.href);
     return typeVersion && hrefVersion && typeVersion === hrefVersion;
   });
-  const pool = aligned.length > 0 ? aligned : matches;
-  return pool.reduce((best, control) =>
-    compareVersions(
-      controlTypeVersion(control.type),
-      controlTypeVersion(best.type),
-    ) > 0
-      ? control
-      : best,
-  );
+  const unaligned = matches.filter((control) => !aligned.includes(control));
+
+  const byVersionDesc = (a: NmosControl, b: NmosControl): number =>
+    compareVersions(controlTypeVersion(b.type), controlTypeVersion(a.type));
+
+  const ordered = [
+    ...[...aligned].sort(byVersionDesc),
+    ...[...unaligned].sort(byVersionDesc),
+  ];
+
+  const seen = new Set<string>();
+  const listed: NmosControl[] = [];
+  for (const control of ordered) {
+    const key = control.href.replace(/\/?$/, "/");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    listed.push(control);
+  }
+  return listed;
 }
 
 function controlTypeVersion(type: string): string | undefined {

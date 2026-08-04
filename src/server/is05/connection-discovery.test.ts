@@ -63,7 +63,41 @@ describe("discoverConnectionEndpoint", () => {
       href: "http://192.168.10.3/x-nmos/connection/v1.1/",
       controlType: "urn:x-nmos:control:sr-ctrl/v1.1",
       ambiguous: false,
+      candidates: [
+        {
+          href: "http://192.168.10.3/x-nmos/connection/v1.1/",
+          controlType: "urn:x-nmos:control:sr-ctrl/v1.1",
+        },
+      ],
     });
+  });
+
+  it("lists multiple sr-ctrl hrefs as ordered candidates", () => {
+    const device = {
+      id: "d1",
+      version: "1:0",
+      label: "D",
+      description: "",
+      type: "urn:x-nmos:device:generic",
+      node_id: "n1",
+      controls: [
+        {
+          type: "urn:x-nmos:control:sr-ctrl/v1.1",
+          href: "http://10.0.0.1/x-nmos/connection/v1.1/",
+        },
+        {
+          type: "urn:x-nmos:control:sr-ctrl/v1.1",
+          href: "http://192.168.1.10/x-nmos/connection/v1.1/",
+        },
+      ],
+    } satisfies NmosDevice;
+
+    const endpoint = discoverConnectionEndpoint(device);
+    expect(endpoint.ambiguous).toBe(true);
+    expect(endpoint.candidates.map((c) => c.href)).toEqual([
+      "http://10.0.0.1/x-nmos/connection/v1.1/",
+      "http://192.168.1.10/x-nmos/connection/v1.1/",
+    ]);
   });
 
   it("marks devices without sr-ctrl as unavailable", () => {
@@ -79,7 +113,7 @@ describe("discoverConnectionEndpoint", () => {
           { type: "urn:x-nmos:control:ncp/v1.0", href: "ws://x" },
         ],
       }),
-    ).toEqual({ availability: "unavailable" });
+    ).toEqual({ availability: "unavailable", candidates: [] });
   });
 
   it("rejects non-http hrefs", () => {
@@ -98,7 +132,11 @@ describe("discoverConnectionEndpoint", () => {
           },
         ],
       }),
-    ).toMatchObject({ availability: "unavailable", href: "ws://not-http" });
+    ).toMatchObject({
+      availability: "unavailable",
+      href: "ws://not-http",
+      candidates: [],
+    });
   });
 
   it("detects href changes", () => {

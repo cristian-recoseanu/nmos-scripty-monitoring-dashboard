@@ -76,6 +76,7 @@ Coverage thresholds (enforced by Vitest): lines/functions/statements ≥ 80%, br
 - Registry / NCP disconnects auto-retry with backoff; malformed grains and IS-12 messages are logged and skipped.
 - NCP monitor harvest re-runs when senders/receivers are added or version-bumped, and when a device version changes (even if the NCP href is unchanged), with debounce and capped exponential backoff for late-created monitors.
 - Per-device NCP failures are isolated so the rest of the tree stays live.
+- When a device advertises multiple `ncp` or `sr-ctrl` controls, the app tries each reachable href in preference order until one works (NCP WebSocket probe / IS-05 harvest failover), then sticks with the working endpoint.
 - `/api/status` exposes registry connection state plus lightweight in-process metrics (resource counts, NCP sessions, reconnect counters).
 - Optional MCP Streamable HTTP server (default off, loopback) exposes read-only investigation tools for external LLM clients.
 
@@ -108,6 +109,7 @@ Open `/` for the split dashboard:
 - Header: system health, total transitions (green/amber), **Reset all**, registry / live connection pills.
 - Detail header: **Ack / Unack** dropdown for node, device, sender, and receiver (acked resources show a purple light; parents ignore their health and transition sums).
 - Live updates over SSE (`/api/events`). Swap views anytime via tabs (`?view=connections`).
+- SSE subscribers are isolated: a disconnected client cannot stall traffic-light updates for others; snapshots are also republished periodically as a safety net.
 
 
 

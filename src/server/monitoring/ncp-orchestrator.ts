@@ -5,6 +5,7 @@ import { childLogger } from "@/server/logging";
 import {
   Is12Session,
   type WebSocketFactory,
+  type WebSocketLike,
 } from "@/server/is12";
 import type {
   NmosDevice,
@@ -70,6 +71,8 @@ export type NcpOrchestratorOptions = {
   harvestRetryMaxMs?: number;
   /** Max harvest attempts while bindings remain incomplete (default 6). */
   harvestRetryMaxAttempts?: number;
+  /** Timeout for probing an alternate NCP WebSocket before trying the next (default 3000ms). */
+  connectProbeTimeoutMs?: number;
 };
 
 /**
@@ -90,6 +93,7 @@ export class NcpOrchestrator extends EventEmitter {
   private readonly harvestRetryBaseMs: number;
   private readonly harvestRetryMaxMs: number;
   private readonly harvestRetryMaxAttempts: number;
+  private readonly connectProbeTimeoutMs: number;
   private readonly sessions = new Map<Uuid, DeviceSession>();
   private readonly deviceStatus = new Map<Uuid, DeviceNcpStatus>();
   private readonly harvestGeneration = new Map<Uuid, number>();
@@ -108,6 +112,7 @@ export class NcpOrchestrator extends EventEmitter {
     this.harvestRetryBaseMs = options.harvestRetryBaseMs ?? 1_000;
     this.harvestRetryMaxMs = options.harvestRetryMaxMs ?? 30_000;
     this.harvestRetryMaxAttempts = options.harvestRetryMaxAttempts ?? 6;
+    this.connectProbeTimeoutMs = options.connectProbeTimeoutMs ?? 3_000;
   }
 
   start(): void {
@@ -346,15 +351,15 @@ export class NcpOrchestrator extends EventEmitter {
   }
 
   private onMonitorUpdated = (state: MonitorState): void => {
-    if (!state.resourceId) {
-      return;
+    if (state.resourceId) {
+      this.store.setMonitorBinding(state.resourceId, {
+        deviceId: state.deviceId,
+        monitorOid: state.oid,
+        overallStatus: overallStatusName(state.overallStatus),
+        health: state.health,
+      });
     }
-    this.store.setMonitorBinding(state.resourceId, {
-      deviceId: state.deviceId,
-      monitorOid: state.oid,
-      overallStatus: overallStatusName(state.overallStatus),
-      health: state.health,
-    });
+    // Always fan out — even unbound monitors may later bind; UI needs SSE.
     this.emit("monitorUpdated", state);
   };
 
@@ -365,7 +370,7 @@ export class NcpOrchestrator extends EventEmitter {
     const endpoint = discoverNcpEndpoint(device);
     const log = childLogger(this.logger, { deviceId: device.id });
 
-    if (endpoint.availability === "unavailable" || !endpoint.href) {
+    if (endpoint.availability === "unavailable" || endpoint.candidates.length === 0) {
       log.info("Device has no usable NCP endpoint");
       await this.teardownDevice(device.id);
       this.deviceStatus.set(device.id, {
@@ -379,7 +384,11 @@ export class NcpOrchestrator extends EventEmitter {
     }
 
     const existing = this.sessions.get(device.id);
-    if (existing && existing.href === endpoint.href) {
+    // Sticky: keep a working session if its href is still advertised.
+    if (
+      existing &&
+      endpoint.candidates.some((candidate) => candidate.href === existing.href)
+    ) {
       if (previous && previous.version !== device.version) {
         this.scheduleHarvest(device.id, "device-version");
       }
@@ -388,15 +397,111 @@ export class NcpOrchestrator extends EventEmitter {
 
     if (existing) {
       log.info(
-        { from: existing.href, to: endpoint.href },
-        "NCP href changed; reconnecting",
+        {
+          from: existing.href,
+          candidates: endpoint.candidates.map((c) => c.href),
+        },
+        "NCP href candidates changed; reconnecting",
       );
       await this.teardownDevice(device.id);
     } else if (previous) {
-      log.info("Opening NCP session for device");
+      log.info(
+        { candidates: endpoint.candidates.map((c) => c.href) },
+        "Opening NCP session for device",
+      );
     }
 
-    await this.openSession(device.id, endpoint.href);
+    await this.openSessionWithFailover(device.id, endpoint.candidates);
+  }
+
+  /**
+   * Try each advertised NCP href until one accepts a WebSocket connection.
+   * Single-candidate devices skip the probe and open immediately.
+   */
+  private async openSessionWithFailover(
+    deviceId: Uuid,
+    candidates: Array<{ href: string; controlType: string }>,
+  ): Promise<void> {
+    const log = childLogger(this.logger, { deviceId });
+    if (candidates.length === 0) {
+      return;
+    }
+
+    if (candidates.length === 1) {
+      await this.openSession(deviceId, candidates[0]!.href);
+      return;
+    }
+
+    const failed: string[] = [];
+    for (const candidate of candidates) {
+      const reachable = await this.probeNcpHref(candidate.href);
+      if (reachable) {
+        if (failed.length > 0) {
+          log.info(
+            {
+              selected: candidate.href,
+              failed,
+              controlType: candidate.controlType,
+            },
+            "NCP endpoint failover succeeded",
+          );
+        }
+        await this.openSession(deviceId, candidate.href);
+        return;
+      }
+      failed.push(candidate.href);
+      log.warn(
+        { href: candidate.href, controlType: candidate.controlType },
+        "NCP endpoint unreachable; trying next candidate",
+      );
+    }
+
+    log.error(
+      { failed, fallback: candidates[0]!.href },
+      "All NCP endpoints failed probe; opening preferred with reconnect backoff",
+    );
+    await this.openSession(deviceId, candidates[0]!.href);
+  }
+
+  /** Brief WebSocket open probe; closes immediately on success/failure. */
+  private probeNcpHref(href: string): Promise<boolean> {
+    const timeoutMs = this.connectProbeTimeoutMs;
+    const factory: WebSocketFactory =
+      this.webSocketFactory ??
+      ((url) => new WebSocket(url) as unknown as WebSocketLike);
+
+    return new Promise((resolve) => {
+      let settled = false;
+      let socket: WebSocketLike;
+      try {
+        socket = factory(href);
+      } catch {
+        resolve(false);
+        return;
+      }
+
+      const done = (ok: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        try {
+          socket.close();
+        } catch {
+          // ignore
+        }
+        resolve(ok);
+      };
+
+      const timer = setTimeout(() => done(false), timeoutMs);
+      socket.addEventListener("open", () => done(true));
+      socket.addEventListener("error", () => done(false));
+      socket.addEventListener("close", () => done(false));
+      if (socket.readyState === 1) {
+        done(true);
+      }
+    });
   }
 
   private async openSession(deviceId: Uuid, href: string): Promise<void> {

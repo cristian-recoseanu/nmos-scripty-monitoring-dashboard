@@ -31,6 +31,50 @@ describe("discoverNcpEndpoint", () => {
       availability: "available",
       href: "ws://127.0.0.1:8080/x-nmos/ncp/v1.0/connect",
       controlType: "urn:x-nmos:control:ncp/v1.0",
+      candidates: [
+        {
+          href: "ws://127.0.0.1:8080/x-nmos/ncp/v1.0/connect",
+          controlType: "urn:x-nmos:control:ncp/v1.0",
+        },
+      ],
+    });
+  });
+
+  it("lists multiple ncp hrefs as ordered candidates", () => {
+    const device = {
+      id: "d1",
+      version: "1:0",
+      label: "D",
+      description: "",
+      type: "urn:x-nmos:device:generic",
+      node_id: "n1",
+      controls: [
+        {
+          type: "urn:x-nmos:control:ncp/v1.0",
+          href: "ws://10.0.0.1/ncp",
+        },
+        {
+          type: "urn:x-nmos:control:ncp/v1.0",
+          href: "ws://192.168.1.10/ncp",
+        },
+        {
+          type: "urn:x-nmos:control:ncp/v1.0",
+          href: "http://not-ws",
+        },
+      ],
+    } satisfies NmosDevice;
+
+    expect(discoverNcpEndpoint(device)).toEqual({
+      availability: "available",
+      href: "ws://10.0.0.1/ncp",
+      controlType: "urn:x-nmos:control:ncp/v1.0",
+      candidates: [
+        { href: "ws://10.0.0.1/ncp", controlType: "urn:x-nmos:control:ncp/v1.0" },
+        {
+          href: "ws://192.168.1.10/ncp",
+          controlType: "urn:x-nmos:control:ncp/v1.0",
+        },
+      ],
     });
   });
 
@@ -47,7 +91,7 @@ describe("discoverNcpEndpoint", () => {
           { type: "urn:x-nmos:control:sr-ctrl/v1.1", href: "http://x" },
         ],
       }),
-    ).toEqual({ availability: "unavailable" });
+    ).toEqual({ availability: "unavailable", candidates: [] });
   });
 
   it("rejects non-websocket ncp hrefs", () => {
@@ -63,7 +107,11 @@ describe("discoverNcpEndpoint", () => {
           { type: "urn:x-nmos:control:ncp/v1.0", href: "http://not-ws" },
         ],
       }),
-    ).toMatchObject({ availability: "unavailable", href: "http://not-ws" });
+    ).toMatchObject({
+      availability: "unavailable",
+      href: "http://not-ws",
+      candidates: [],
+    });
   });
 
   it("detects href changes", () => {

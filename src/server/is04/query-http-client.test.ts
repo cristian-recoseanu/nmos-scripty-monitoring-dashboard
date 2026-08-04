@@ -6,6 +6,8 @@ import {
   QueryHttpClient,
   findNcpControl,
   isNcpControlType,
+  listNcpControls,
+  listSrCtrlControls,
 } from "@/server/is04";
 
 describe("isNcpControlType / findNcpControl", () => {
@@ -26,6 +28,35 @@ describe("isNcpControlType / findNcpControl", () => {
     expect(control?.href).toContain("ncp");
     expect(findNcpControl([])).toBeUndefined();
     expect(findNcpControl(undefined)).toBeUndefined();
+  });
+
+  it("lists all ncp controls in advertisement order", () => {
+    expect(
+      listNcpControls([
+        { type: "urn:x-nmos:control:ncp/v1.0", href: "ws://a" },
+        { type: "urn:x-nmos:control:sr-ctrl/v1.1", href: "http://x" },
+        { type: "urn:x-nmos:control:ncp/v1.0", href: "ws://b" },
+        { type: "urn:x-nmos:control:ncp/v1.0", href: "ws://a" },
+      ]).map((c) => c.href),
+    ).toEqual(["ws://a", "ws://b"]);
+  });
+
+  it("lists sr-ctrl controls with aligned highest version first", () => {
+    expect(
+      listSrCtrlControls([
+        {
+          type: "urn:x-nmos:control:sr-ctrl/v1.0",
+          href: "http://a/x-nmos/connection/v1.0/",
+        },
+        {
+          type: "urn:x-nmos:control:sr-ctrl/v1.1",
+          href: "http://b/x-nmos/connection/v1.1/",
+        },
+      ]).map((c) => c.href),
+    ).toEqual([
+      "http://b/x-nmos/connection/v1.1/",
+      "http://a/x-nmos/connection/v1.0/",
+    ]);
   });
 });
 

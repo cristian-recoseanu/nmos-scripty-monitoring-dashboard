@@ -1,4 +1,5 @@
 import type { HealthSeverity } from "@/lib/health";
+import { mapOverallStatus } from "@/lib/health";
 import type { NmosFormatKind } from "@/lib/nmos-format";
 import type {
   NmosDevice,
@@ -16,7 +17,10 @@ import type {
   DomainStatusSnapshot,
   MonitorState,
 } from "@/server/monitoring";
-import { discoverNcpEndpoint } from "@/server/monitoring";
+import {
+  discoverNcpEndpoint,
+  overallStatusName,
+} from "@/server/monitoring";
 
 import {
   aggregateSystemHealth,
@@ -212,7 +216,18 @@ export function monitorToDto(state: MonitorState): MonitorDetailDto {
     statusReportingDelay: state.statusReportingDelay,
     autoResetCountersAndMessages: state.autoResetCountersAndMessages,
     synchronizationSourceId: state.synchronizationSourceId,
-    health: state.health,
+    health: (() => {
+      if (
+        state.overallStatus !== undefined &&
+        state.overallStatus !== null &&
+        state.overallStatus !== ""
+      ) {
+        return mapOverallStatus(
+          overallStatusName(state.overallStatus) ?? state.overallStatus,
+        );
+      }
+      return state.health;
+    })(),
     totalTransitions: sumDomainTransitions(state),
     domains,
   };

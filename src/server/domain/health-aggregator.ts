@@ -2,6 +2,7 @@ import {
   aggregateParentHealth,
   compareSeverity,
   contributesTransitions,
+  mapOverallStatus,
   type HealthSeverity,
 } from "@/lib/health";
 import {
@@ -16,7 +17,11 @@ import type {
   ResourceStore,
   Uuid,
 } from "@/server/is04";
-import type { DeviceNcpStatus, MonitorState } from "@/server/monitoring";
+import {
+  overallStatusName,
+  type DeviceNcpStatus,
+  type MonitorState,
+} from "@/server/monitoring";
 
 export type EntityKind = "system" | "node" | "device" | "sender" | "receiver";
 
@@ -71,6 +76,20 @@ function labelOf(resource: { label?: string; id: string }): string {
   return resource.label?.trim() || resource.id;
 }
 
+/** Prefer overallStatus for tree LEDs so they stay aligned with the detail pane. */
+function healthFromMonitor(monitor: MonitorState): HealthSeverity {
+  if (
+    monitor.overallStatus !== undefined &&
+    monitor.overallStatus !== null &&
+    monitor.overallStatus !== ""
+  ) {
+    return mapOverallStatus(
+      overallStatusName(monitor.overallStatus) ?? monitor.overallStatus,
+    );
+  }
+  return monitor.health;
+}
+
 export function sumDomainTransitions(
   monitor: MonitorState | undefined,
 ): number {
@@ -112,7 +131,7 @@ function leafFromResource(
       id: resource.id,
       label: labelOf(resource),
       kind,
-      health: monitor.health,
+      health: healthFromMonitor(monitor),
       message: monitor.overallStatusMessage,
       hasMonitor: true,
       totalTransitions: sumDomainTransitions(monitor),

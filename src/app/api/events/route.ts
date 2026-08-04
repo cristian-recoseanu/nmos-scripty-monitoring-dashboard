@@ -16,20 +16,19 @@ export async function GET(request: Request) {
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
-      const send = (event: RuntimeEvent) => {
-        controller.enqueue(encoder.encode(encodeSse(event)));
-      };
-
-      // Initial snapshot
-      send({ type: "snapshot", snapshot: app.getSnapshot() });
-
-      const unsubscribe = bus.subscribe(send);
-      const heartbeat = setInterval(() => {
-        send({ type: "heartbeat", at: Date.now() });
-      }, 15_000);
+      let closed = false;
+      let unsubscribe: () => void = () => undefined;
+      let heartbeat: ReturnType<typeof setInterval> | undefined;
 
       const close = () => {
-        clearInterval(heartbeat);
+        if (closed) {
+          return;
+        }
+        closed = true;
+        if (heartbeat !== undefined) {
+          clearInterval(heartbeat);
+          heartbeat = undefined;
+        }
         unsubscribe();
         try {
           controller.close();
@@ -37,6 +36,27 @@ export async function GET(request: Request) {
           // already closed
         }
       };
+
+      const send = (event: RuntimeEvent) => {
+        if (closed) {
+          return;
+        }
+        try {
+          controller.enqueue(encoder.encode(encodeSse(event)));
+        } catch {
+          // Client gone / stream errored — drop this subscriber so emit
+          // continues for everyone else.
+          close();
+        }
+      };
+
+      // Initial snapshot
+      send({ type: "snapshot", snapshot: app.getSnapshot() });
+
+      unsubscribe = bus.subscribe(send);
+      heartbeat = setInterval(() => {
+        send({ type: "heartbeat", at: Date.now() });
+      }, 15_000);
 
       request.signal.addEventListener("abort", close);
     },

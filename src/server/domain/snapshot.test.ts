@@ -118,12 +118,13 @@ describe("buildSystemSnapshot / buildSelectionDetail", () => {
     expect(snapshot.system.children).toHaveLength(1);
     expect(snapshot.system.children[0]?.children?.[0]?.children).toHaveLength(2);
     expect(snapshot.registry.connected).toBe(true);
-    expect(snapshot.connections.hubs).toHaveLength(1);
-    expect(snapshot.connections.hubs[0]?.sender.id).toBe("sender-1");
-    expect(snapshot.connections.hubs[0]?.receivers.map((r) => r.id)).toEqual([
+    expect(snapshot.connections).toBeDefined();
+    expect(snapshot.connections!.hubs).toHaveLength(1);
+    expect(snapshot.connections!.hubs[0]?.sender.id).toBe("sender-1");
+    expect(snapshot.connections!.hubs[0]?.receivers.map((r) => r.id)).toEqual([
       "receiver-1",
     ]);
-    expect(snapshot.connections.disconnected).toEqual([]);
+    expect(snapshot.connections!.disconnected).toEqual([]);
 
     const systemDetail = buildSelectionDetail("system", "system", options);
     expect(systemDetail?.kind).toBe("system");

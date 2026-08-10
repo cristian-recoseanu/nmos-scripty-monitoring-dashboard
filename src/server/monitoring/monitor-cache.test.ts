@@ -4,6 +4,7 @@ import { createLogger } from "@/server/logging";
 import {
   Is12Session,
   MessageType,
+  type NcElementId,
   type WebSocketLike,
 } from "@/server/is12";
 import {
@@ -32,7 +33,6 @@ import {
   METHOD_GET_LATE_PACKET_COUNTERS,
   METHOD_GET_TRANSMISSION_ERROR_COUNTERS,
   METHOD_SENDER_RESET_COUNTERS,
-  type NcElementId,
 } from "@/server/monitoring";
 
 function createMockSocket(

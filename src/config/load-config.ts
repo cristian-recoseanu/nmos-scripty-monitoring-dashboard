@@ -44,7 +44,7 @@ function readOptionalYamlFile(path: string): RawConfig | undefined {
 }
 
 function envValue(
-  env: NodeJS.ProcessEnv,
+  env: EnvBag,
   name: string,
 ): string | undefined {
   const value = env[name];
@@ -54,7 +54,7 @@ function envValue(
   return value;
 }
 
-function configFromEnv(env: NodeJS.ProcessEnv): RawConfig {
+function configFromEnv(env: EnvBag): RawConfig {
   const registry: RawConfig = {};
 
   const host = envValue(env, "NMOS_REGISTRY_HOST") ?? envValue(env, "NMOS_REGISTRY_URL");
@@ -170,7 +170,7 @@ function deepMerge(base: RawConfig, override: RawConfig): RawConfig {
 }
 
 function resolveConfigPath(
-  env: NodeJS.ProcessEnv,
+  env: EnvBag,
   configPath?: string,
 ): string {
   const configured = configPath ?? env.NMOS_CONFIG_PATH ?? "config.yaml";
@@ -181,11 +181,14 @@ function resolveConfigPath(
   return join(/*turbopackIgnore: true*/ process.cwd(), configured);
 }
 
+/** Loose env bag for tests and partial overrides (not a full ProcessEnv). */
+export type EnvBag = Record<string, string | undefined>;
+
 export type LoadConfigOptions = {
   /** Absolute or relative path to optional YAML config file. */
   configPath?: string;
   /** Environment bag used for tests; defaults to process.env. */
-  env?: NodeJS.ProcessEnv;
+  env?: EnvBag;
   /** When true, skip reading a config file even if configPath is set. */
   ignoreFile?: boolean;
 };

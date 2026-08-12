@@ -177,8 +177,8 @@
   }
 
   .pill[data-ok="false"] {
-    color: #fdb022;
-    border-color: color-mix(in srgb, #fdb022 35%, transparent);
-    background: color-mix(in srgb, #fdb022 12%, transparent);
+    color: #ffe566;
+    border-color: color-mix(in srgb, #ffe566 35%, transparent);
+    background: color-mix(in srgb, #ffe566 12%, transparent);
   }
 }

@@ -25,7 +25,7 @@
   }
 
   .count[data-nonzero="true"] {
-    color: #fdb022;
-    background: color-mix(in srgb, #fdb022 16%, transparent);
+    color: #ffe566;
+    background: color-mix(in srgb, #ffe566 16%, transparent);
   }
 }

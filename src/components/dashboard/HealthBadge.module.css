@@ -57,7 +57,7 @@
   }
 
   .badge[data-health="degraded"] {
-    color: #fdb022;
+    color: #ffe566;
   }
 
   .badge[data-health="healthy"] {

@@ -9,6 +9,7 @@ export {
 export {
   ConfigError,
   loadConfig,
+  resolveListenPort,
   summariseConfig,
   type LoadConfigOptions,
 } from "./load-config";

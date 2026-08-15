@@ -128,7 +128,7 @@ Open `/` for the split dashboard:
 | `NMOS_CONFIG_PATH`        | Path to YAML config file (default `config.yaml`)  |
 | `LOG_LEVEL`               | `fatal` … `trace` / `silent`                      |
 | `LOG_FILE`                | Persistent log path (default `logs/app.log`)      |
-| `PORT`                    | App listen port (default 3000)                    |
+| `PORT`                    | App listen port; overrides YAML `appPort` (`npm start` reads `appPort` when unset) |
 | `MCP_ENABLED`             | Enable MCP HTTP server (default `false`)          |
 | `MCP_HOST`                | MCP bind address (default `127.0.0.1`)            |
 | `MCP_PORT`                | MCP listen port (default `3100`)                  |

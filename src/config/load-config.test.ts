@@ -9,6 +9,7 @@ import {
   appConfigSchema,
   buildQueryApiBaseUrl,
   loadConfig,
+  resolveListenPort,
   resolveSecureWs,
   summariseConfig,
 } from "@/config";
@@ -200,5 +201,45 @@ describe("loadConfig", () => {
         queryApiBaseUrl: "http://127.0.0.1:3211/x-nmos/query/v1.3",
       },
     });
+  });
+});
+
+describe("resolveListenPort", () => {
+  it("defaults to 3000 when nothing is configured", () => {
+    expect(resolveListenPort({ ignoreFile: true, env: {} })).toBe(3000);
+  });
+
+  it("reads appPort from YAML when env is unset", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nmos-config-"));
+    const path = join(dir, "config.yaml");
+    writeFileSync(path, "appPort: 3333\n");
+    expect(resolveListenPort({ configPath: path, env: {} })).toBe(3333);
+  });
+
+  it("lets PORT override YAML appPort", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nmos-config-"));
+    const path = join(dir, "config.yaml");
+    writeFileSync(path, "appPort: 3333\n");
+    expect(
+      resolveListenPort({
+        configPath: path,
+        env: { PORT: "4000" },
+      }),
+    ).toBe(4000);
+  });
+
+  it("defaults to 3000 when the config file is missing", () => {
+    expect(
+      resolveListenPort({
+        configPath: join(tmpdir(), "nmos-missing-config.yaml"),
+        env: {},
+      }),
+    ).toBe(3000);
+  });
+
+  it("rejects an invalid PORT", () => {
+    expect(() =>
+      resolveListenPort({ ignoreFile: true, env: { PORT: "nope" } }),
+    ).toThrow(ConfigError);
   });
 });

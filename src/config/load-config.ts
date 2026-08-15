@@ -239,6 +239,39 @@ export function summariseConfig(config: AppConfig): Record<string, unknown> {
   };
 }
 
+/**
+ * Listen port for `next start` / `npm start`.
+ * Precedence: `PORT` / `APP_PORT` env → YAML `appPort` → 3000.
+ * Does not require a valid registry config (unlike {@link loadConfig}).
+ */
+export function resolveListenPort(options: LoadConfigOptions = {}): number {
+  const env = options.env ?? process.env;
+  const fromEnv = envValue(env, "PORT") ?? envValue(env, "APP_PORT");
+  if (fromEnv !== undefined) {
+    return parseListenPort(fromEnv, "PORT");
+  }
+
+  if (options.ignoreFile) {
+    return 3000;
+  }
+
+  const path = resolveConfigPath(env, options.configPath);
+  const fromFile = readOptionalYamlFile(path);
+  const raw = fromFile?.appPort;
+  if (raw === undefined || raw === null || raw === "") {
+    return 3000;
+  }
+  return parseListenPort(raw, "appPort");
+}
+
+function parseListenPort(raw: unknown, label: string): number {
+  const parsed = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new ConfigError(`Invalid ${label}: ${String(raw)}`);
+  }
+  return parsed;
+}
+
 export {
   appConfigSchema,
   buildQueryApiBaseUrl,

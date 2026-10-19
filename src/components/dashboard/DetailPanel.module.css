@@ -88,6 +88,43 @@
   border-bottom-color: color-mix(in srgb, #0b6bcb 80%, transparent);
 }
 
+.reinitialise {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  max-width: 16rem;
+}
+
+.reinitialiseButton {
+  font: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.reinitialiseButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.reinitialiseButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reinitialiseMessage {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: right;
+  opacity: 0.75;
+}
+
 .sectionTitle {
   margin: 1rem 0 0.4rem;
   font-size: 0.8rem;

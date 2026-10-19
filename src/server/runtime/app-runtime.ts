@@ -234,6 +234,8 @@ export class AppRuntime {
     this.ncp.on("monitorUpdated", () => this.eventBus.notifyChanged());
     this.ncp.on("deviceStatus", () => this.eventBus.notifyChanged());
     this.ncp.on("harvested", () => this.eventBus.notifyChanged());
+    // Monitor drops must reach the UI before a fast re-harvest replaces them.
+    this.ncp.on("monitorsCleared", () => this.eventBus.publishSnapshotNow());
     this.is05.on("updated", () => this.eventBus.notifyChanged());
     this.is05.on("removed", () => this.eventBus.notifyChanged());
     this.is04.on("connection", () => this.eventBus.notifyChanged());

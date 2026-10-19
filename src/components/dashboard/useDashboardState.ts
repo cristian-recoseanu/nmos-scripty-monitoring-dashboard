@@ -2,7 +2,6 @@
 
 import {
   useCallback,
-  useDeferredValue,
   useEffect,
   useMemo,
   useState,
@@ -14,6 +13,7 @@ import type {
   ConnectionsSnapshotDto,
   SelectionDetailDto,
   SystemSnapshotDto,
+  TreeEntityDto,
 } from "@/server/domain/snapshot";
 import type { AppRuntimeStatus } from "@/server/runtime/app-runtime";
 
@@ -64,6 +64,23 @@ function parseView(viewParam: string | null): DashboardView {
   return viewParam === "connections" ? "connections" : "system";
 }
 
+function findEntityHealth(
+  nodes: TreeEntityDto[] | undefined,
+  kind: string,
+  id: string,
+): string | undefined {
+  for (const node of nodes ?? []) {
+    if (node.kind === kind && node.id === id) {
+      return node.health;
+    }
+    const nested = findEntityHealth(node.children, kind, id);
+    if (nested !== undefined) {
+      return nested;
+    }
+  }
+  return undefined;
+}
+
 export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
   const router = useRouter();
   const pathname = usePathname();
@@ -82,7 +99,14 @@ export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
   const [snapshot, setSnapshot] = useState(() =>
     ensureSnapshotConnections(initialSnapshot),
   );
-  const deferredSnapshot = useDeferredValue(snapshot);
+  const selectedHealth =
+    selection.kind === "system"
+      ? snapshot.system.health
+      : findEntityHealth(
+          snapshot.system.children,
+          selection.kind,
+          selection.id,
+        );
   const [detail, setDetail] = useState<SelectionDetailDto | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
@@ -189,7 +213,7 @@ export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
       cancelled = true;
       clearInterval(refresh);
     };
-  }, [selection.kind, selection.id]);
+  }, [selection.kind, selection.id, selectedHealth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,7 +240,7 @@ export function useDashboardState(initialSnapshot: SystemSnapshotDto) {
   }, []);
 
   return {
-    snapshot: deferredSnapshot,
+    snapshot,
     selection,
     setSelection,
     view,

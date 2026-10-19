@@ -43,6 +43,23 @@ export type DeviceNcpStatus = {
   lastError?: string;
 };
 
+export class NcpReinitialiseError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "NcpReinitialiseError";
+    this.status = status;
+  }
+}
+
+export type NodeReinitialiseResult = {
+  devices: number;
+  reinitialised: number;
+  skipped: number;
+  failures: Array<{ deviceId: Uuid; error: string }>;
+};
+
 type DeviceSession = {
   deviceId: Uuid;
   href: string;
@@ -244,6 +261,89 @@ export class NcpOrchestrator extends EventEmitter {
     }
 
     return { reset, skipped, failures };
+  }
+
+  /**
+   * Drop the device NCP session and its cached sender/receiver monitors, then
+   * open a new WebSocket and harvest the monitors the device currently exposes.
+   */
+  async reinitialiseDevice(deviceId: Uuid): Promise<void> {
+    const device = this.store.getDevice(deviceId);
+    if (!device) {
+      throw new NcpReinitialiseError(`Unknown device ${deviceId}`, 404);
+    }
+
+    const endpoint = discoverNcpEndpoint(device);
+    if (
+      endpoint.availability === "unavailable" ||
+      endpoint.candidates.length === 0
+    ) {
+      throw new NcpReinitialiseError(
+        `Device ${deviceId} has no usable NCP endpoint`,
+        409,
+      );
+    }
+
+    this.logger.info(
+      { deviceId, hrefs: endpoint.candidates.map((candidate) => candidate.href) },
+      "Reinitialising device NCP session",
+    );
+
+    // Discard any harvest already in flight on the session we are replacing.
+    this.harvestGeneration.set(
+      deviceId,
+      (this.harvestGeneration.get(deviceId) ?? 0) + 1,
+    );
+    await this.teardownDevice(deviceId);
+    await this.openSessionWithFailover(deviceId, endpoint.candidates);
+  }
+
+  /**
+   * Reinitialise every child device of a node that advertises an NCP endpoint.
+   * Devices without NCP are skipped. Per-device failures do not stop the rest.
+   */
+  async reinitialiseNode(nodeId: Uuid): Promise<NodeReinitialiseResult> {
+    if (!this.store.getNode(nodeId)) {
+      throw new NcpReinitialiseError(`Unknown node ${nodeId}`, 404);
+    }
+
+    const devices = this.store.getDevicesForNode(nodeId);
+    const failures: NodeReinitialiseResult["failures"] = [];
+    let reinitialised = 0;
+    let skipped = 0;
+
+    for (const device of devices) {
+      const endpoint = discoverNcpEndpoint(device);
+      if (
+        endpoint.availability === "unavailable" ||
+        endpoint.candidates.length === 0
+      ) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        await this.reinitialiseDevice(device.id);
+        reinitialised += 1;
+      } catch (error) {
+        failures.push({
+          deviceId: device.id,
+          error:
+            error instanceof Error ? error.message : "Reinitialise failed",
+        });
+        this.logger.warn(
+          { err: error, nodeId, deviceId: device.id },
+          "Failed to reinitialise child device",
+        );
+      }
+    }
+
+    return {
+      devices: devices.length,
+      reinitialised,
+      skipped,
+      failures,
+    };
   }
 
   async setAutoReset(
@@ -533,14 +633,14 @@ export class NcpOrchestrator extends EventEmitter {
     });
 
     session.on("disconnected", () => {
+      // A replaced session can still emit close after teardown. Ignore it so
+      // it cannot wipe monitors harvested on the new connection.
+      if (this.sessions.get(deviceId)?.session !== session) {
+        return;
+      }
       status.connected = false;
       this.clearHarvestSchedule(deviceId);
-      for (const state of this.cache.listForDevice(deviceId)) {
-        if (state.resourceId) {
-          this.store.setMonitorBinding(state.resourceId, undefined);
-        }
-      }
-      this.cache.clearDevice(deviceId);
+      this.dropDeviceMonitors(deviceId);
       this.emit("deviceStatus", status);
     });
 
@@ -804,6 +904,17 @@ export class NcpOrchestrator extends EventEmitter {
     });
   }
 
+  /** Drop cached sender/receiver monitors and tell listeners immediately. */
+  private dropDeviceMonitors(deviceId: Uuid): void {
+    for (const state of this.cache.listForDevice(deviceId)) {
+      if (state.resourceId) {
+        this.store.setMonitorBinding(state.resourceId, undefined);
+      }
+    }
+    this.cache.clearDevice(deviceId);
+    this.emit("monitorsCleared", { deviceId });
+  }
+
   private async teardownDevice(deviceId: Uuid): Promise<void> {
     this.clearHarvestSchedule(deviceId);
     const entry = this.sessions.get(deviceId);
@@ -812,12 +923,7 @@ export class NcpOrchestrator extends EventEmitter {
       this.sessions.delete(deviceId);
     }
 
-    for (const state of this.cache.listForDevice(deviceId)) {
-      if (state.resourceId) {
-        this.store.setMonitorBinding(state.resourceId, undefined);
-      }
-    }
-    this.cache.clearDevice(deviceId);
+    this.dropDeviceMonitors(deviceId);
     this.deviceStatus.delete(deviceId);
     this.emit("deviceStatus", {
       deviceId,

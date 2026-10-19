@@ -8,6 +8,7 @@ import {
 } from "@/server/is12";
 import {
   NcpOrchestrator,
+  NcpReinitialiseError,
   resetCounterThrottle,
 } from "@/server/monitoring";
 
@@ -506,6 +507,140 @@ describe("NcpOrchestrator", () => {
     expect(orchestrator.getDeviceStatus("device-1")?.connected).toBe(true);
     expect(sockets.some((s) => s.href.includes("unreachable"))).toBe(true);
     expect(sockets.some((s) => s.href.includes("127.0.0.1"))).toBe(true);
+
+    await orchestrator.stop();
+  });
+
+  it("reinitialises a device by replacing its session and harvesting again", async () => {
+    const logger = createLogger({ level: "silent", pretty: false });
+    const store = new ResourceStore();
+    const sockets: ReturnType<typeof createMockSocket>[] = [];
+
+    const orchestrator = new NcpOrchestrator({
+      store,
+      logger,
+      webSocketFactory: () => {
+        const socket = createMockSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const firstHarvest = new Promise<{ deviceId: string }>((resolve) => {
+      orchestrator.once("harvested", resolve);
+    });
+
+    orchestrator.start();
+    store.upsert("receiver", receiver);
+    store.upsert("device", device);
+    sockets[0].readyState = 1;
+    sockets[0].trigger("open");
+    await firstHarvest;
+
+    expect(store.getMonitorBinding("receiver-1")?.monitorOid).toBe(10);
+
+    const clearedDuringReset = vi.fn();
+    orchestrator.on("monitorsCleared", () => {
+      clearedDuringReset();
+      expect(orchestrator.cache.getByResourceId("receiver-1")).toBeUndefined();
+      expect(store.getMonitorBinding("receiver-1")).toBeUndefined();
+    });
+
+    const secondHarvest = new Promise<{ deviceId: string }>((resolve) => {
+      orchestrator.once("harvested", resolve);
+    });
+
+    await orchestrator.reinitialiseDevice("device-1");
+    expect(clearedDuringReset).toHaveBeenCalled();
+
+    expect(sockets[0].close).toHaveBeenCalled();
+    expect(orchestrator.cache.getByResourceId("receiver-1")).toBeUndefined();
+    expect(store.getMonitorBinding("receiver-1")).toBeUndefined();
+    expect(sockets).toHaveLength(2);
+
+    sockets[1].readyState = 1;
+    sockets[1].trigger("open");
+    await secondHarvest;
+
+    expect(orchestrator.cache.getByResourceId("receiver-1")?.health).toBe(
+      "degraded",
+    );
+    expect(store.getMonitorBinding("receiver-1")?.monitorOid).toBe(10);
+    expect(orchestrator.getDeviceStatus("device-1")?.connected).toBe(true);
+
+    sockets[0].trigger("close");
+    expect(store.getMonitorBinding("receiver-1")?.monitorOid).toBe(10);
+    expect(orchestrator.getDeviceStatus("device-1")?.connected).toBe(true);
+
+    await orchestrator.stop();
+  });
+
+  it("reinitialises every NCP child of a node and skips devices without NCP", async () => {
+    const logger = createLogger({ level: "silent", pretty: false });
+    const store = new ResourceStore();
+    const sockets: ReturnType<typeof createMockSocket>[] = [];
+
+    const orchestrator = new NcpOrchestrator({
+      store,
+      logger,
+      webSocketFactory: () => {
+        const socket = createMockSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    orchestrator.start();
+    store.upsert("node", {
+      id: "node-1",
+      version: "1:0",
+      label: "Node 1",
+      description: "",
+      href: "http://node/x-nmos/node/v1.3/",
+    });
+    store.upsert("receiver", receiver);
+    store.upsert("device", device);
+    store.upsert("device", {
+      ...device,
+      id: "device-2",
+      label: "Device 2",
+      controls: [],
+    });
+    sockets[0].readyState = 1;
+    sockets[0].trigger("open");
+    await vi.waitFor(() => {
+      expect(orchestrator.cache.getByResourceId("receiver-1")).toBeDefined();
+    });
+
+    const again = new Promise<{ deviceId: string }>((resolve) => {
+      orchestrator.once("harvested", resolve);
+    });
+    const result = await orchestrator.reinitialiseNode("node-1");
+    sockets[1].readyState = 1;
+    sockets[1].trigger("open");
+    await again;
+
+    expect(result).toEqual({
+      devices: 2,
+      reinitialised: 1,
+      skipped: 1,
+      failures: [],
+    });
+    expect(sockets[0].close).toHaveBeenCalled();
+    expect(orchestrator.getDeviceStatus("device-2")?.availability).toBe(
+      "unavailable",
+    );
+    expect(store.getMonitorBinding("receiver-1")?.monitorOid).toBe(10);
+
+    await expect(orchestrator.reinitialiseNode("missing")).rejects.toBeInstanceOf(
+      NcpReinitialiseError,
+    );
+    await expect(orchestrator.reinitialiseDevice("missing")).rejects.toMatchObject(
+      { status: 404 },
+    );
+    await expect(orchestrator.reinitialiseDevice("device-2")).rejects.toMatchObject(
+      { status: 409 },
+    );
 
     await orchestrator.stop();
   });

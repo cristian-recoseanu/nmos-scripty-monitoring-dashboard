@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 import { HealthBadge } from "./HealthBadge";
 import { SystemTree } from "./SystemTree";
@@ -369,6 +369,112 @@ describe("DetailPanel", () => {
       kind: "sender",
       id: "sender-1",
     });
+  });
+
+  it("reinitialises a device from the details pane", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, deviceId: "device-1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const detail: SelectionDetailDto = {
+      kind: "device",
+      id: "device-1",
+      label: "Device 1",
+      health: "healthy",
+      totalTransitions: 0,
+      acknowledged: false,
+      resource: {
+        id: "device-1",
+        version: "1:0",
+        label: "Device 1",
+        description: "",
+        type: "urn:x-nmos:device:generic",
+        node_id: "node-1",
+        controls: [],
+      },
+      ncp: {
+        availability: "available",
+        connected: true,
+        href: "ws://device/ncp",
+      },
+      worstContributors: [],
+    };
+
+    render(
+      <DetailPanel
+        detail={detail}
+        loading={false}
+        error={null}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reinitialise" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/device-1/reinitialise",
+        { method: "POST" },
+      );
+    });
+    expect(
+      await screen.findByText(
+        "NCP session restarted. Monitors are being re-acquired.",
+      ),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("reinitialises every child device from a node details pane", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        reinitialised: 2,
+        skipped: 0,
+        failures: [],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const detail: SelectionDetailDto = {
+      kind: "node",
+      id: "node-1",
+      label: "Node A",
+      health: "healthy",
+      totalTransitions: 1,
+      acknowledged: false,
+      resource: {
+        id: "node-1",
+        version: "1:0",
+        label: "Node A",
+        description: "",
+        href: "http://node/x-nmos/node/v1.3/",
+      },
+      worstContributors: [],
+    };
+
+    render(
+      <DetailPanel
+        detail={detail}
+        loading={false}
+        error={null}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reinitialise" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/nodes/node-1/reinitialise",
+        { method: "POST" },
+      );
+    });
+    expect(
+      await screen.findByText("Restarted 2 device session(s)."),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   it("shows loading and error states", () => {

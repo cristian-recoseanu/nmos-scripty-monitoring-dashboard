@@ -11,6 +11,7 @@ import { TransitionCount } from "./TransitionCount";
 import { Is05Panel } from "./Is05Panel";
 import { AcknowledgeControl } from "./AcknowledgeControl";
 import { ControlsTable } from "./ControlsTable";
+import { ReinitialiseButton } from "./ReinitialiseButton";
 import type { Selection } from "./useDashboardState";
 import styles from "./DetailPanel.module.css";
 
@@ -251,6 +252,9 @@ export function DetailPanel({
               id={detail.id}
               acknowledged={detail.acknowledged}
             />
+          ) : null}
+          {detail.kind === "device" || detail.kind === "node" ? (
+            <ReinitialiseButton kind={detail.kind} id={detail.id} />
           ) : null}
         </div>
       </header>

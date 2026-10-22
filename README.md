@@ -135,6 +135,64 @@ Open `/` for the split dashboard:
 | `MCP_PATH`                | MCP endpoint path (default `/mcp`)                |
 
 
+## Docker
+
+Images built from `main` are published to Docker Hub as `latest`, and each build is also tagged `main-<git-sha>`. Pull:
+
+The image is `linux/amd64` and `linux/arm64`. It listens on port **3000** inside the container (`PORT` overrides that). Run a single container: registry sessions and monitor state live in that process.
+
+The registry address must be reachable from the container. `127.0.0.1` is the container itself. For a Query API on the Docker host, use `host.docker.internal` (on Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]`).
+
+Environment variables override a mounted config file. The full list is in the table above.
+
+### Compose with environment variables
+
+```yaml
+services:
+  dashboard:
+    image: cristirec/nmos-scripty-monitoring-dashboard:latest
+    ports:
+      - "3000:3000"
+      - "3100:3100"
+    environment:
+      NMOS_REGISTRY_HOST: registry.example
+      NMOS_REGISTRY_PORT: "80"
+      NMOS_REGISTRY_PROTOCOL: http
+      LOG_LEVEL: info
+      MCP_ENABLED: "true"
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "3100"
+      MCP_PATH: "/mcp"
+    restart: unless-stopped
+```
+
+`MCP_HOST=0.0.0.0` lets clients outside the container reach MCP at `http://<docker-host>:3100/mcp`. Leave out `MCP_ENABLED`, `MCP_HOST`, `MCP_PORT`, `MCP_PATH`, and the `3100` publish, and MCP stays off.
+
+Map a different host port by changing the left-hand side, for example `"8080:3000"`. To listen on another port inside the container, set `PORT` and use that value on the right-hand side.
+
+### Compose with a mounted config file
+
+Start from `config.example.yaml`. The file is read from `/app/config.yaml`.
+
+```yaml
+services:
+  dashboard:
+    image: cristirec/nmos-scripty-monitoring-dashboard:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - dashboard-logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  dashboard-logs:
+```
+
+`appPort` in the file is the listen port when `PORT` is not set. Keep it aligned with the right-hand side of `ports`. The named volume holds `logs/app.log`. The process runs as uid **1001**; a bind-mounted log directory needs to be writable by that user.
+
+Set `NMOS_CONFIG_PATH` only when the file is mounted somewhere other than `/app/config.yaml`.
+
 
 ## MCP (optional)
 

@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+.next
+out
+coverage
+logs
+Tasks.md
+config.yaml
+.env*
+*.md
+Dockerfile
+.dockerignore
